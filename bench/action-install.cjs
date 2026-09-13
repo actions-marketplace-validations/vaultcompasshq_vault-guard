@@ -245,7 +245,13 @@ function classifySarif(file) {
 // Whether the scanner the install step left behind is the one under the runner
 // temp, checked by reading the manifest npm wrote rather than by trusting the
 // path the run step was told to call.
-function inspectInstalledScanner(prefix) {
+//
+// `underRunnerPrefix` is measured against the RUNNER TEMP rather than against
+// the prefix the manifest was found through, which would be tautological now
+// that the prefix itself is read out of action.yml: the question this field
+// answers is whether the install landed outside the checkout, and only the
+// runner temp can answer it.
+function inspectInstalledScanner(prefix, runnerTemp) {
   const manifestPath = path.join(
     prefix,
     'lib',
@@ -260,7 +266,7 @@ function inspectInstalledScanner(prefix) {
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
   return {
     present: true,
-    underRunnerPrefix: manifestPath.startsWith(`${prefix}${path.sep}`),
+    underRunnerPrefix: manifestPath.startsWith(`${runnerTemp}${path.sep}`),
     version: manifest.version ?? null,
   };
 }
@@ -401,7 +407,21 @@ async function runCase({ caseId, actionFile, scenario, packages, version, root, 
 
     const outputs = parseOutputs(outputFile);
     const sarif = classifySarif(path.join(workspace, ctx.inputs['sarif-output']));
-    const installed = inspectInstalledScanner(path.join(runnerTemp, 'vault-guard-action'));
+
+    // THE PREFIX COMES OUT OF THE FILE, like everything else a step declares.
+    // Hardcoding `<runner temp>/vault-guard-action` here would have made this
+    // one field a property of the harness: an action.yml that moved its install
+    // into the workspace would go on being reported as installed under the
+    // runner prefix, which is precisely the claim this record exists to carry.
+    // The pre-fix action declares no install step and therefore no prefix, and
+    // that absence is the vulnerability rather than a gap in the reading.
+    const installPrefix = action.hasStep(INSTALL_STEP)
+      ? action.evaluateStepEnv(INSTALL_STEP, ctx).npm_config_prefix
+      : null;
+    const installed =
+      installPrefix === undefined || installPrefix === null
+        ? { present: false, underRunnerPrefix: false, version: null }
+        : inspectInstalledScanner(installPrefix, runnerTemp);
 
     const markers = {
       hostileRegistryCopyRan: existsSync(hostileMarker),

@@ -17,7 +17,25 @@ set -euo pipefail
 # below check the real action.yml, and a run from anywhere else used to check
 # whatever action.yml happened to sit in the current directory, which is a
 # guard that passes without having looked at the file it names.
-ACTION_YML="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/action.yml"
+SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ACTION_YML="$(cd "${SCRIPTS_DIR}/.." && pwd)/action.yml"
+
+INSTALL_STEP="Install vault-guard outside the workspace"
+RUN_STEP="Run vault-guard"
+
+# For the `bash -n` syntax checks below. Removed on exit, including on the
+# `exit 1` paths, so a failed run does not leave a directory behind.
+SYNTAX_DIR="$(mktemp -d)"
+trap 'rm -rf "${SYNTAX_DIR}"' EXIT
+
+# node reads action.yml through the same parser the jest suites and the dogfood
+# harness use. Every GitHub-hosted runner image ships node, so a missing one is
+# a broken environment rather than a reason to quietly skip the strongest checks
+# in this file.
+if ! command -v node >/dev/null 2>&1; then
+  printf 'node is required: this script asks action.yml about its own steps rather than grepping for them\n' >&2
+  exit 1
+fi
 
 validate_path() {
   local value="$1"
@@ -175,11 +193,52 @@ fi
 # working-directory runs at the workspace root, which is the head's own tree, so
 # npm would start with the pull request's .npmrc, manifest and lockfile under
 # its cwd.
-wd_count="$(grep -cE '^[[:space:]]*working-directory: \$\{\{ runner\.temp \}\}$' "${ACTION_YML}" || true)"
-if [[ "${wd_count}" != "2" ]]; then
-  printf 'expected both the install and run steps to declare working-directory: runner.temp, found %s\n' "${wd_count}" >&2
-  exit 1
-fi
+#
+# Asked of each STEP BY NAME, through the same parser the jest suites and the
+# dogfood harness use, rather than by counting occurrences in the file. A count
+# of exactly two is a guard that goes red the day somebody gives the validate
+# step a working-directory, which is a harmless change, and it cannot say WHICH
+# steps the two belong to, which is the only thing it was ever asked.
+assert_step_workdir() {
+  local step="$1"
+  local declared
+  if ! declared="$(node "${SCRIPTS_DIR}/extract-action-step.cjs" "${ACTION_YML}" "${step}" working-directory)"; then
+    printf 'action.yml has no step named %s\n' "${step}" >&2
+    exit 1
+  fi
+  if [[ "${declared}" != '${{ runner.temp }}' ]]; then
+    printf 'step %s must declare working-directory: ${{ runner.temp }}, found %q\n' "${step}" "${declared}" >&2
+    exit 1
+  fi
+}
+
+assert_step_workdir "${INSTALL_STEP}"
+assert_step_workdir "${RUN_STEP}"
+
+# Guard: every step script PARSES under the bash running this file.
+#
+# This is what makes the bash 3.2 claim real. The grep above catches the two
+# bash 4 idioms somebody is most likely to reach for, and a grep can only ever
+# catch the ones already on the list; `bash -n` catches whatever is actually
+# there. On a macOS runner the bash running this file is 3.2, which is the
+# version the claim is about, so this check is worth most exactly where the
+# behavioural suites do not run.
+assert_step_parses() {
+  local step="$1"
+  local script="${SYNTAX_DIR}/step.sh"
+  if ! node "${SCRIPTS_DIR}/extract-action-step.cjs" "${ACTION_YML}" "${step}" run > "${script}"; then
+    printf 'action.yml has no step named %s\n' "${step}" >&2
+    exit 1
+  fi
+  if ! bash -n "${script}"; then
+    printf 'the run script of step %s does not parse under bash %s\n' "${step}" "${BASH_VERSION}" >&2
+    exit 1
+  fi
+}
+
+assert_step_parses "Validate inputs"
+assert_step_parses "${INSTALL_STEP}"
+assert_step_parses "${RUN_STEP}"
 
 # Guard: the scanner is called by ABSOLUTE path. A bare name would be resolved
 # against PATH, and a workflow that put the checkout's node_modules/.bin on PATH

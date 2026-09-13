@@ -469,6 +469,11 @@ describe('action.yml runs the installed scanner and nothing else', () => {
       ['reports/out.sarif', 'reports'],
       ['reports/sub/out.sarif', 'reports'],
       ['a/b/c/out.sarif', 'a'],
+      // A TRAILING SLASH on the final component. `test -L` FOLLOWS the link
+      // when the path it is given ends in a slash, so this spelling walked
+      // straight past the guard: `dirname` then returned the workspace, the
+      // loop ended having checked nothing, and the write went through the link.
+      ['out.sarif/', 'out.sarif'],
     ]) {
       const runner = makeRunner({ 'sarif-output': target });
       installStubScanner(runner, {});
@@ -539,6 +544,24 @@ describe('action.yml "Run vault-guard", under GitHub bash flags', () => {
       expect([code, run.status]).toEqual([code, 2]);
       expect(run.stdout).toContain('did not produce a result');
     }
+  });
+
+  it('publishes the MAPPED exit code, not the raw shell status', () => {
+    // The binary is never installed here, so the shell answers 127. A caller
+    // reading `exit-code` is doing so precisely to tell a verdict from a
+    // failure to reach one, and the output documents three values: publishing
+    // the raw 127 would hand them a fourth the contract says cannot happen.
+    //
+    // It also proves the absolute path does not fall back to PATH: the head's
+    // planted copy is first on PATH and answers to the same name, and a step
+    // that resolved by name would have run it and exited 0.
+    const runner = makeRunner();
+    const run = runStepFor(runner);
+    expect(run.status).toBe(2);
+    expect(run.outputs).toContain('exit_code=2');
+    expect(run.outputs).not.toContain('exit_code=127');
+    expect(run.plantedRan).toBe(false);
+    expect(run.stdout).toContain('did not produce a result');
   });
 
   it('publishes no results file when the scan wrote nothing', () => {

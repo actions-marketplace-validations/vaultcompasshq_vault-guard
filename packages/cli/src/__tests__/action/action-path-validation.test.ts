@@ -207,6 +207,10 @@ describe('action.yml "Validate inputs", paths', () => {
       '.GitHub/workflows/out.sarif',
       '.GITHUB/out.sarif',
       './.GitHub/out.sarif',
+      // Trailing slashes are normalised away too, so `.github/` is not a second
+      // name that reaches the same directory unchecked.
+      '.github/out.sarif/',
+      './/.github/out.sarif//',
     ]) {
       const run = runValidateWith({ 'sarif-output': spelling });
       expect([spelling, run.status]).not.toEqual([spelling, 0]);
@@ -215,6 +219,22 @@ describe('action.yml "Validate inputs", paths', () => {
     // And a path that merely starts with the same letters is not caught.
     expect(runValidateWith({ 'sarif-output': '.githubbed/out.sarif' }).status).toBe(0);
     expect(runValidateWith({ 'sarif-output': 'out.sarif' }).status).toBe(0);
+  });
+
+  it('refuses a results target that names a directory rather than a file', () => {
+    // `.`, `./` and `.//` all normalise to nothing or to a single dot, and
+    // every one of them is a directory. The redirect would fail deep inside the
+    // run step with a shell error, rather than here with the name of the
+    // workflow input that caused it.
+    for (const value of ['.', './', './/', './/./']) {
+      const run = runValidateWith({ 'sarif-output': value });
+      expect([value, run.status]).not.toEqual([value, 0]);
+      expect(run.stdout).toContain('must name a file');
+    }
+    // A trailing slash on a real filename is a stray character, not a
+    // directory: accepted here and stripped in the run step, where `test -L`
+    // would otherwise follow the symlink it is meant to catch.
+    expect(runValidateWith({ 'sarif-output': 'out.sarif/' }).status).toBe(0);
   });
 
   it('accepts a `./` prefix, which is ordinary Actions style', () => {
