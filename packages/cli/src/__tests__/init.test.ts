@@ -11,6 +11,7 @@ import {
 } from '../commands/init';
 import {
   ACTION_TAG,
+  UPLOAD_SARIF_SHA,
   MANIFEST_RELATIVE_PATH,
   defaultVaultGuardConfigJson,
   githubWorkflowYaml,
@@ -368,6 +369,36 @@ describe('vault-guard init', () => {
       if (ref.startsWith('vaultcompasshq/vault-guard@')) continue;
       expect([ref, /@[0-9a-f]{40}$/.test(ref)]).toEqual([ref, true]);
     }
+  });
+
+  it('scaffolds the permissions the upload step needs, and no more', () => {
+    // The generated workflow uploads SARIF, and the default GITHUB_TOKEN is
+    // read-only: without this block the upload fails with a 403 that says
+    // nothing about the scan, on the first run, in every repository that ran
+    // init. Narrow on purpose too -- this job reads code and writes one
+    // code-scanning log.
+    const yaml = githubWorkflowYaml();
+    expect(yaml).toContain('permissions:');
+    expect(yaml).toContain('contents: read');
+    expect(yaml).toContain('security-events: write');
+    expect(yaml).not.toContain('permissions: write-all');
+  });
+
+  it('pins the uploader to the same SHA this repository pins', () => {
+    // Two spellings of one decision drift. ci.yml is where this repository
+    // decided which upload-sarif commit it trusts; the scaffold hands that same
+    // commit to every consumer, so it reads the value rather than carrying a
+    // second copy of it that nobody diffs.
+    const ci = fs.readFileSync(
+      path.join(__dirname, '..', '..', '..', '..', '.github', 'workflows', 'ci.yml'),
+      'utf-8',
+    );
+    const pinned = ci.match(/github\/codeql-action\/upload-sarif@([0-9a-f]{40})/);
+    expect(pinned).not.toBeNull();
+    expect(UPLOAD_SARIF_SHA).toBe((pinned as RegExpMatchArray)[1]);
+    expect(githubWorkflowYaml()).toContain(
+      `github/codeql-action/upload-sarif@${UPLOAD_SARIF_SHA}`,
+    );
   });
 
   it('scaffolds no `version` input, because the Action tag carries the scanner pin', () => {

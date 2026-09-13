@@ -242,6 +242,11 @@ Vault Guard does **not** mine Git history: see [docs/PRODUCT_SCOPE.md](./docs/PR
 jobs:
   secrets:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Required by the upload step. Without it the default token is read-only
+      # and the upload fails with a 403 that has nothing to do with the scan.
+      security-events: write
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -254,14 +259,18 @@ jobs:
           path: .
           format: sarif
           sarif-output: vault-guard-results.sarif
-      - uses: github/codeql-action/upload-sarif@v3
+      - uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v4.37.0
         # Guarded on the output being non-empty: a run that could not scan at
         # all writes no document, and handing that empty file to the uploader
         # fails the job with a parse error on top of the real message.
         if: always() && steps.vault-guard.outputs.results-file != ''
         with:
-          sarif_file: vault-guard-results.sarif
+          sarif_file: ${{ steps.vault-guard.outputs.results-file }}
 ```
+
+The uploader is pinned to a commit rather than to `v3`, because it runs in your
+repository with your `security-events: write`. `vault-guard init` scaffolds this
+same workflow, permissions and pin included.
 
 No `version` input in that example, because the default is the scanner version
 this Action tag shipped with. Leaving it out is the recommended shape: the tag

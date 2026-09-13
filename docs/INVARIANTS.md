@@ -183,6 +183,13 @@ or the other, as of 1.7.1:
 - `CHANGELOG.md`, the release heading and any migration line naming a tag
 - `bench/action-install.cjs`, `PRE_FIX_REF` — the tag the negative control reads
   its vulnerable `action.yml` out of, which must stay the release BEFORE the fix
+- `packages/cli/src/init/templates.ts`, `UPLOAD_SARIF_SHA` and
+  `.github/workflows/ci.yml`'s `upload-sarif@` pin — one decision about which
+  third-party commit this project trusts, spelled in two files: the scaffold
+  hands it to every consumer's repository, where it runs with that repository's
+  `security-events: write`. `init.test.ts` reads the workflow and asserts the
+  constant matches, so bumping one and not the other goes red rather than
+  shipping a consumer a commit nobody here chose
 - `bench/baseline.action-install.json`, `scannerVersion` and the case ids —
   the recorded run embeds both numbers, so a scanner bump or a new `PRE_FIX_REF`
   makes the baseline stale and `--compare` says so rather than a human noticing
@@ -247,8 +254,14 @@ invisible from Linux, where the broken spelling works:
 **Enforced by:** `scripts/test-action-path-validation.sh`, which the
 `action-path-validation` CI job runs on `macos-latest` as well as
 `ubuntu-latest`. It extracts each step's run script through
-`scripts/extract-action-step.cjs` and runs `bash -n` over it, so on the macOS
-runner the whole file is parsed by the bash version the claim is about. That is
+`scripts/extract-action-step.cjs` and runs `"${BASH}" -n` over it, so on the
+macOS runner the whole file is parsed by the bash version the claim is about.
+
+`"${BASH}"`, never a bare `bash`. A bare name is a PATH lookup, and on a machine
+with Homebrew bash ahead of `/bin` the check ran under bash 5 while the script
+itself ran under 3.2 — the one guard against bash 4 syntax performed by a bash
+that accepts it. A review demonstrated it with a `;&` case fallthrough, which is
+legal in 4.0, a syntax error in 3.2, and passed the gate. That is
 the enforcement; the textual guards against `${x,,}` and `${x^^}` here and in
 `action-path-validation.test.ts` are a faster, narrower net that only ever
 catches the idioms already on the list, and they name the bug when they fire.

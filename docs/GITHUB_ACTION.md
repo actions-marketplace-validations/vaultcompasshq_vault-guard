@@ -137,6 +137,11 @@ on: pull_request
 jobs:
   secrets:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Needed only if you chain upload-sarif, and needed explicitly: the
+      # default token is read-only, so the upload 403s without it.
+      security-events: write
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -193,11 +198,19 @@ when the file has content**, so the guard is one expression rather than a step
 of its own:
 
 ```yaml
+    permissions:
+      contents: read
+      # The upload needs this explicitly; the default token is read-only and
+      # the step fails with a 403 that says nothing about the scan.
+      security-events: write
+    steps:
       - uses: vaultcompasshq/vault-guard@v1.7.1
         id: vg
         with:
           format: sarif
-      - uses: github/codeql-action/upload-sarif@v3
+      # Pinned to a commit, not to `v3`: this runs in your repository with the
+      # permission above. Same SHA `vault-guard init` scaffolds.
+      - uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v4.37.0
         if: always() && steps.vg.outputs.results-file != ''
         with:
           sarif_file: ${{ steps.vg.outputs.results-file }}

@@ -91,6 +91,13 @@ on:
 jobs:
   secrets:
     runs-on: ubuntu-latest
+    # Declared explicitly, because the default GITHUB_TOKEN is read-only and the
+    # upload step below then fails with a 403 that says nothing about the scan.
+    # Declared narrowly for the same reason it is declared at all: this job
+    # reads your code and writes one code-scanning log, and nothing else.
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:

@@ -223,6 +223,15 @@ assert_step_workdir "${RUN_STEP}"
 # there. On a macOS runner the bash running this file is 3.2, which is the
 # version the claim is about, so this check is worth most exactly where the
 # behavioural suites do not run.
+#
+# "${BASH}" -n, NEVER a bare `bash -n`. A bare name is a PATH lookup, and a
+# machine with Homebrew bash ahead of /bin on PATH parses the file with bash 5
+# while this script itself runs under 3.2 -- so the one check that exists to
+# catch bash 4 syntax is performed by a bash that accepts it. A review proved
+# that with a `;&` case fallthrough: legal in 4.0, a syntax error in 3.2, and
+# the gate passed under /bin/bash. ${BASH} is the interpreter running this
+# script, so the parse and the claim are about the same program, and the failure
+# message prints that interpreter's own version rather than some other one's.
 assert_step_parses() {
   local step="$1"
   local script="${SYNTAX_DIR}/step.sh"
@@ -230,8 +239,8 @@ assert_step_parses() {
     printf 'action.yml has no step named %s\n' "${step}" >&2
     exit 1
   fi
-  if ! bash -n "${script}"; then
-    printf 'the run script of step %s does not parse under bash %s\n' "${step}" "${BASH_VERSION}" >&2
+  if ! "${BASH}" -n "${script}"; then
+    printf 'the run script of step %s does not parse under %s (bash %s)\n' "${step}" "${BASH}" "${BASH_VERSION}" >&2
     exit 1
   fi
 }
@@ -419,4 +428,6 @@ if grep -nE '\$\{\{[^}]*base_ref' "${ACTION_YML}" >/dev/null; then
   exit 1
 fi
 
-printf 'action path validation OK (%s bash %s)\n' "$(uname -s)" "${BASH_VERSION}"
+# Names the interpreter, not just the version: the whole point of the syntax
+# check above is which bash did the parsing, so the green line has to say.
+printf 'action path validation OK (%s, %s, bash %s)\n' "$(uname -s)" "${BASH}" "${BASH_VERSION}"
