@@ -18,6 +18,8 @@
     "prepublishOnly": "pnpm build",
     "release": "pnpm publish -r --access public --filter \"@vaultcompass/*\"",
     "bench": "node bench/run.cjs",
+    "bench:action-install": "node bench/action-install.cjs --compare",
+    "bench:action-install:update-baseline": "node bench/action-install.cjs --write-baseline",
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release:next": "pnpm build && pnpm check:pack && pnpm publish -r --tag next --no-git-checks --filter \"@vaultcompass/*\""
