@@ -7,6 +7,7 @@
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "test:coverage": "pnpm -r --workspace-concurrency=1 run test:coverage",
+    "test:release-kind": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.release-kind.config.mjs",
     "test:windows": "pnpm --filter @vaultcompass/vault-guard-core test -- --testPathIgnorePatterns=pre-commit-hook && pnpm --filter @vaultcompass/vault-guard test -- --testPathIgnorePatterns=integration",
     "gen:rules-doc": "node scripts/gen-rules-doc.cjs",
     "lint": "eslint .",

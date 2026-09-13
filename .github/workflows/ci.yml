@@ -52,6 +52,13 @@ jobs:
     - name: Run tests with coverage
       run: pnpm test:coverage
 
+    # Runs here, not only in release.yml's own "Run release-kind tests"
+    # step, so a canary that breaks (the real action.yml, the real
+    # CHANGELOG.md) fails on the pull request that broke it rather than
+    # only being discovered at tag time.
+    - name: Run release-kind tests
+      run: pnpm test:release-kind
+
     - name: Security audit
       run: pnpm audit --audit-level high
   test-windows:
