@@ -78,4 +78,39 @@ export default [
       },
     },
   },
+  {
+    // scripts/lib/release-kind.mjs and scripts/classify-release-tag.mjs:
+    // plain ESM tooling for .github/workflows/release.yml, run before
+    // "pnpm install" so it has no build step ahead of it.
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      sourceType: 'module',
+      ecmaVersion: 2022,
+      globals: {
+        console: 'readonly',
+        process: 'readonly',
+      },
+    },
+  },
+  {
+    // The release-kind test suite, run under jest.release-kind.config.mjs
+    // (see "test:release-kind" in package.json) rather than through any
+    // package's own ts-jest config, so it needs jest's own globals added
+    // explicitly here the way the TypeScript test files get them for free
+    // from @types/jest.
+    files: ['scripts/tests/**/*.test.mjs'],
+    languageOptions: {
+      globals: {
+        describe: 'readonly',
+        it: 'readonly',
+        test: 'readonly',
+        expect: 'readonly',
+        beforeAll: 'readonly',
+        beforeEach: 'readonly',
+        afterAll: 'readonly',
+        afterEach: 'readonly',
+        jest: 'readonly',
+      },
+    },
+  },
 ];
