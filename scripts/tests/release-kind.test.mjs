@@ -258,9 +258,12 @@ describe('the real CHANGELOG.md', () => {
     ).version;
     const changelog = readFileSync(path.join(ROOT, 'CHANGELOG.md'), 'utf8');
 
-    // The same pattern classifyRelease builds, against the version the
-    // packages actually carry rather than a number written down here.
-    expect(changelog).toMatch(new RegExp(`^##\\s*\\[${version.replace(/\./g, '\\.')}\\]`, 'm'));
+    // The same check classifyRelease does, against the version the
+    // packages actually carry rather than a number written down here: a
+    // trimmed line starting with the literal "## [" + version + "]", no
+    // regex built from the version string at all.
+    const hasHeading = changelog.split('\n').some((line) => line.trim().startsWith(`## [${version}]`));
+    expect(hasHeading).toBe(true);
   });
 });
 
@@ -360,9 +363,11 @@ describe('classifyRelease', () => {
       const published = registryStub(
         PACKAGE_NAMES.filter((name) => name !== missing).map((name) => `${name}@1.7.0`)
       );
-      expect(() => classifyRelease(actionOnlyInputs({ publishedVersion: published }))).toThrow(
-        new RegExp(missing.replace(/[/@]/g, '\\$&'))
-      );
+      // A plain string, not a regex built from the package name: jest's
+      // toThrow(string) checks the message for this substring, which is
+      // exactly what a hand-escaped regex was doing here with none of the
+      // escaping.
+      expect(() => classifyRelease(actionOnlyInputs({ publishedVersion: published }))).toThrow(missing);
     }
   });
 

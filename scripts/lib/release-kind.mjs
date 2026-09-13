@@ -304,8 +304,20 @@ export function classifyRelease({
       `Tag ${tagName} looks like an action-only release, but CHANGELOG.md could not be read at the tagged commit, so its entry could not be checked. Refusing to publish.`
     );
   }
-  const headingPattern = new RegExp(`^##\\s*\\[${tagVersionText.replace(/\./g, '\\.')}\\]`, 'm');
-  if (!headingPattern.test(changelogText)) {
+  // A regex built from the tag-derived version string once lived here.
+  // The version is exact semver by the time it reaches this point (the
+  // parseExactSemver check above already refused anything else), so it
+  // was never exploitable, but CodeQL flags the pattern on sight
+  // (js/regex-injection, js/incomplete-sanitization) and a "just escape it
+  // properly" fix is still a regex built from untrusted input for the next
+  // person to get subtly wrong. Splitting into lines and matching a
+  // literal prefix needs no escaping at all. The trailing "]" is load
+  // bearing: "## [1.7.10]" must not match a heading search for "1.7.1",
+  // and closing the bracket into the literal is what stops the shorter
+  // version from being read as a prefix of the longer one.
+  const headingPrefix = `## [${tagVersionText}]`;
+  const hasHeading = changelogText.split('\n').some((line) => line.trim().startsWith(headingPrefix));
+  if (!hasHeading) {
     throw new Error(
       `Tag ${tagName} looks like an action-only release, but CHANGELOG.md at the tagged commit has no "## [${tagVersionText}]" heading. An action-only release is still a release: a tag with no entry is far more likely to be a version bump someone forgot to commit than a deliberate one. Refusing to publish.`
     );
