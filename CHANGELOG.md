@@ -7,6 +7,97 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-09-13
+
+**An action-only release. The tag moves; the npm packages do not.** Nothing in
+the scanner changed, so `@vaultcompass/vault-guard` and the other three packages
+stay at 1.7.0 on npm, and the Action's `version` default stays `1.7.0`, which is
+the scanner this Action tag installs and was tested against.
+
+That makes the Action tag and the scanner version two different numbers for the
+first time, and it is deliberate rather than an oversight:
+`vaultcompasshq/vault-guard@v1.7.1` installs
+`@vaultcompass/vault-guard@1.7.0`. Publishing an identical scanner as 1.8.0 so
+the two strings matched would burn a version number on a change that touches no
+scanning code, through a trusted-publisher path that is a one-way door.
+
+**Pinning `vaultcompasshq/vault-guard@v1.7.0` gets the OLD Action**, the one
+that installs the scanner from inside the checkout. Move to `@v1.7.1`.
+
+### Upgrading
+
+1. **Delete `version: latest` from your workflow.** The input takes an exact
+   version now and a dist-tag is refused, with a message saying to remove the
+   input. The default is the scanner this tag shipped with, which is the pin you
+   want. `vault-guard init` no longer scaffolds the input at all.
+2. **Guard a chained `upload-sarif` on the `results-file` output being
+   non-empty.** It is empty now when the scan wrote no document, which is what
+   exit 2 looks like. Previously the output named a zero-byte file and the
+   upload failed with a SARIF parse error sitting on top of the real message.
+
+### Security
+
+- **The Action installs the scanner from outside the tree it scans.** It ran
+  `npx --yes "@vaultcompass/vault-guard@${VG_VERSION}"` from inside the
+  checkout, which put the choice of program inside the tree under judgment by
+  two routes. An `.npmrc` committed by the head repoints the registry npx
+  fetches from. A copy of the package already in the head's `node_modules`,
+  from the workflow's own earlier install step, is what npx runs, with the
+  version pin acting only as a satisfaction check on a package the head wrote.
+  Either one lets a pull request choose the program that scans it, and the
+  second needs no registry at all. On a `pull_request` run that checkout is the
+  untrusted head, so this was the gate reading its config from the base branch
+  and then running a binary the head chose. The package is now installed
+  globally into a prefix under the runner temp, with npm started from the
+  runner temp rather than from the workspace, and called by absolute path.
+
+  Both routes are exercised against real npm by `bench/action-install.cjs`,
+  which runs the Action's own steps with two local registries, and records the
+  pre-fix Action from tag `v1.7.0` as a negative control: the attack has to be
+  visible there or the harness is not measuring anything.
+
+- **The scan path is absolute and resolved.** The step no longer starts inside
+  the checkout, so the scan root is built from `GITHUB_WORKSPACE` and passed
+  whole. It is resolved with `pwd -P`, because vault-guard resolves the
+  pull-request file set against its own process cwd: a logical path against a
+  resolved cwd puts every file in the head tree outside the scan target, and
+  the run scans zero files and reports a clean result over nothing. A `path`
+  input that resolves outside the workspace through a symlink is refused.
+
+### Changed
+
+- **`version` takes an exact version only, and defaults to the scanner version
+  the Action shipped with.** It accepted dist-tags and defaulted to `latest`. A
+  tag hands the choice of scanner to the registry on the morning of the run.
+  The old `[0-9A-Za-z.+-]{1,64}` charset also accepted values npm reads as a
+  PATH rather than a version, `.`, `..` and `payload.tgz` among them, and
+  values that are not semver at all such as `01.7.0`, which npm falls back to
+  treating as a dist-tag. **A workflow relying on the old `latest` default must
+  remove the input.**
+- **Only 0, 1 and 2 are verdicts.** Any other exit code from the run step,
+  including the 126 and 127 the shell produces when a binary is missing or not
+  executable, is reported as could-not-run and re-raised as 2 rather than
+  passed through as if the scanner had produced it.
+- **`results-file` is published only when the run wrote something**, and a new
+  `exit-code` output carries vault-guard's own code.
+- **Input validation.** No value may begin with a dash, rather than only the
+  ref: a path or a ref starting with `-` is read as an option by whichever
+  command it reaches. `trust-base: off` is refused in any capitalisation, so an
+  opt-out with a shift key in front of it is not an opt-out either.
+- **`sarif-output` may not resolve under `.github/`**, which holds the workflow
+  file and the CODEOWNERS entry that decide how this gate runs. Compared after
+  normalising `./` segments, doubled slashes and case to a fixed point, so
+  `./.github/x` and `.GitHub/x` are refused too. A `./` prefix stays legal on
+  every input.
+- **`sarif-output` may not resolve through a symlink**, at the file or at any
+  directory on the way to it, checked before the containing directories are
+  created rather than after. The head controls those, and a symlink there sends
+  the write outside the workspace.
+- **`vault-guard init` scaffolds `@v1.7.1` and no `version` input.** The
+  template's Action pin used to be derived from the CLI package version, which
+  would have scaffolded the pre-fix Action into every repository initialised
+  after this release.
+
 ## [1.7.0] - 2026-09-06
 
 Minor bump on all four packages. **The rule: on a pull-request run, every

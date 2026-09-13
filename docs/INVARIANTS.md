@@ -1,0 +1,183 @@
+# Invariants
+
+Cross-cutting properties this repository is supposed to hold, with the reason
+each one exists and the thing that enforces it. An audit reads this file instead
+of re-deriving a list from memory, and every new architectural decision appends
+to it.
+
+**This file is a claim, not a fact.** It was started during the 1.7.1
+action-only release and currently covers the composite Action and the two
+version numbers around it; it is not yet a complete list of this repository's
+invariants, and saying so is more useful than implying coverage it does not
+have. Every entry below names what enforces it, so a reader can check the claim
+against the code rather than trusting the prose. An entry written in the same
+change as the fix it describes deserves the most scrutiny, and these were.
+
+---
+
+## The scanner is itself a control input, and comes from outside the tree
+
+Pull-request mode draws a line between a SUBJECT (the head tree) and a CONTROL
+INPUT (`.vault-guard.json`, `.vault-guard.local.json`, the baseline), and reads
+the control inputs from the base ref. That list was incomplete, and the missing
+entry is the largest one: **the program doing the scanning**. A gate that reads
+its config from the base branch and then runs a binary the head chose has moved
+the decision, not removed it.
+
+Through `@v1.7.0` the Action ran `npx --yes "@vaultcompass/vault-guard@${VG_VERSION}"`
+with the checkout as its working directory. Two routes followed from that, and
+both are decisions real npm makes about files the head controls:
+
+- **A committed `.npmrc` repoints the registry.** npx in non-global mode reads
+  project config from its cwd, and `--yes` means no prompt. A pull request
+  adding one root file chooses which registry the scanner is fetched from.
+  Both the global `registry=` key and the scope-specific
+  `@vaultcompass:registry=` key do it; the second is quieter, because every
+  other install in the workflow keeps working normally.
+- **An installed copy wins outright.** `npx pkg@version` run in a tree whose
+  `node_modules` already satisfies that spec runs the local copy and never
+  contacts a registry. The version pin degrades from a choice of program to a
+  satisfaction check on a package the head wrote, and any workflow with an
+  install step before the gate hands that over.
+
+**The rule: install the scanner from the registry into a prefix under the runner
+temp, start npm from the runner temp, and call the result by absolute path.**
+Not "install outside and run wherever": a composite step with no
+`working-directory` runs at the workspace root, so npm would still start with
+the head's `.npmrc`, manifest and lockfile under its cwd. Global mode is
+documented not to read project config, which is a property of a version of npm
+rather than of this repository, and is not what the boundary should rest on.
+
+**Enforced by:** `packages/cli/src/__tests__/action/action-run-script.test.ts`
+(runs both steps with npm stubbed, recording npm's argv, cwd and prefix),
+`packages/cli/src/__tests__/action/action-path-validation.test.ts` (the steps
+exist at all, and neither runs npx), `scripts/test-action-path-validation.sh`
+(the same guards, on a macOS runner), and `bench/action-install.cjs` (real npm,
+two local registries, both routes mounted).
+
+**What this does NOT cover**, and the comment in `action.yml` says so: a pull
+request can edit the workflow file, because a `pull_request` run uses the
+workflow as it is in the merge commit. Branch protection on the base branch with
+review required for `.github/workflows/**` is the control for that, and nothing
+the action does substitutes for it. The absolute binary path is likewise not
+total: the shim starts with `#!/usr/bin/env node`, so the interpreter is still a
+PATH lookup a cooperating workflow can influence.
+
+## The scan path is absolute AND resolved, and that is one decision with two halves
+
+The run step starts in the runner temp, so the scan root is built from
+`GITHUB_WORKSPACE` rather than passed as a relative `.`.
+
+It is then resolved with `pwd -P` before being handed over, because vault-guard
+anchors a directory scan at its own process cwd: node reports that cwd with
+symlinks resolved, while bash's `cd` keeps the logical path. Hand the scanner a
+logical `/var/...` target while its cwd reads `/private/var/...` and every file
+in the head tree falls outside the target by `path.relative`, so the run scans
+**zero files and reports a clean result over nothing**. That is a green check
+that scanned nothing, which is the worst failure shape a gate has.
+
+It would be silent on a Linux runner, whose workspace path is canonical already.
+It was found by `bench/action-install.cjs` on a macOS temp directory, where
+`/var` is a symlink, before the release shipped.
+
+The step then chdirs into that scan root, which is deliberate and separate from
+where npm ran: vault-guard loads its config, resolves the trust base and
+computes every reported path from its cwd, so a scanner left in the runner temp
+would fail to resolve `origin/<base>` and exit 2 on every pull-request run,
+blaming a `fetch-depth` the caller already set.
+
+**Enforced by:** the `SCAN_ROOT` guards in
+`packages/cli/src/__tests__/action/action-path-validation.test.ts` and
+`scripts/test-action-path-validation.sh`, and by the `filesScanned` field
+recorded per case in `bench/baseline.action-install.json` — a run that scans
+nothing shows up there as a number, not as a passing test.
+
+## The `version` input takes an exact version only
+
+It defaults to the SCANNER version the Action tag shipped with, which is a
+different number from the tag whenever an action-only release happens.
+
+A dist-tag hands the choice of program to the registry on the morning of the
+run. A charset check is not enough on its own: npm's specifier parser reads a
+value beginning with `.` or ending in `.tgz` as a local path, so `.`, `..` and
+`payload.tgz` resolve against a directory instead of the registry, and a value
+that is not valid semver at all — `01.7.0`, `1.7.00` — falls back to being
+treated as a dist-tag. The refusal message names the migration (`REMOVE the
+input`), because `latest` used to be the default and a refusal with no
+alternative in it is a wall.
+
+**Enforced by:** the version cases in both action test files and in
+`scripts/test-action-path-validation.sh`.
+
+## The Action tag and the scanner version are two numbers, and both get bumped
+
+1.7.1 is the first release where they came apart: the tag moved, the four npm
+packages stayed at 1.7.0. They are allowed to differ, and an action-only release
+is the normal reason — publishing an identical scanner purely to keep two
+strings matching burns a version through a one-way trusted-publisher path. What
+is not allowed is a document telling a reader to pin one number while an example
+next to it pins the other.
+
+**The rule: when either number moves, grep for BOTH.** The places that carry one
+or the other, as of 1.7.1:
+
+- `action.yml`, the `version` input's `default:` — the SCANNER version
+- `action.yml`, the `version` input's description, which names an example
+- `packages/*/package.json` (four packages) — the scanner version
+- `docs/GITHUB_ACTION.md`, the inputs table's `version` default — the scanner
+- `README.md`, the `uses: vaultcompasshq/vault-guard@vX.Y.Z` example — the TAG
+- `README.md`, the prose about which scanner a tag installs — both numbers
+- `docs/GITHUB_ACTION.md`, every `uses:` example — the tag
+- `packages/cli/src/init/templates.ts`, `ACTION_TAG` — the tag that
+  `vault-guard init` scaffolds into a generated workflow
+- `CHANGELOG.md`, the release heading and any migration line naming a tag
+- `bench/action-install.cjs`, `PRE_FIX_REF` — the tag the negative control reads
+  its vulnerable `action.yml` out of, which must stay the release BEFORE the fix
+
+The init template's pin used to be `v${readCliVersion()}`, derived from the CLI
+package version. An action-only release is exactly where that breaks: it would
+have scaffolded `@v1.7.0`, the pre-fix Action, into every repository
+initialised after the release. It is a constant now, and `init.test.ts` asserts
+it is not the package version and is never behind it.
+
+**Enforced by:** `init.test.ts` (the template pin), and the
+`defaults to the scanner version this repository publishes` case in
+`action-path-validation.test.ts` (the `version` default against
+`packages/cli/package.json`). The rest of the list is a grep, not a gate.
+
+## Testing the Action derives every step's environment and cwd from action.yml
+
+A harness with its own table of environment variables, or its own idea of a
+step's working directory, asserts a property of the harness. The two lines that
+carry the whole install boundary are "which directory is npm started in" and
+"which prefix does it install under", and a harness that supplies those cannot
+see them go missing.
+
+Both the jest suites and `bench/action-install.cjs` read the step script, the
+step's `env:` mapping and its `working-directory:` out of `action.yml` through
+one shared parser, `scripts/lib/action-steps.cjs`. A second copy of that parser
+would drift, and the drift would be invisible: both callers would keep passing,
+each against its own idea of what the file says.
+
+`VG_ACTION_FILE` points both suites at a mutated copy, so any of this can be
+made to fail on demand. Both files honour it; one of them not honouring it would
+produce a green run against a weakened file. Verified in this change by deleting
+the install step from a copy of `action.yml` (8 tests red) and by removing
+`working-directory` from the run step (2 tests red).
+
+## action.yml must parse and behave on bash 3.2
+
+macOS ships bash 3.2, and GitHub's macOS runners do too. Two bug classes here are
+invisible from Linux, where the broken spelling works:
+
+- a `=~` pattern with `{1,256}` fails to COMPILE on the BSD regex engine
+  (`RE_DUP_MAX` is 255), and a pattern that fails to compile does not match, so
+  every path input including the default `.` was rejected;
+- `${x,,}` and `${x^^}` are bash 4.0 case expansions and are a SYNTAX ERROR on
+  3.2, so a step using one fails to parse entirely. The `.github/` comparison
+  needs case folding precisely because macOS filesystems are case-insensitive,
+  which is what makes this the likeliest place to reach for one. `tr` instead.
+
+**Enforced by:** `scripts/test-action-path-validation.sh`, which the
+`action-path-validation` CI job runs on `macos-latest` as well as
+`ubuntu-latest`, plus a textual guard in `action-path-validation.test.ts`.

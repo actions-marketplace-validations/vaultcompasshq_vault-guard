@@ -10,6 +10,7 @@ import {
   revertInit,
 } from '../commands/init';
 import {
+  ACTION_TAG,
   MANIFEST_RELATIVE_PATH,
   defaultVaultGuardConfigJson,
   githubWorkflowYaml,
@@ -291,21 +292,50 @@ describe('vault-guard init', () => {
     expect(plan.conflicts.some(c => c.path === 'lefthook-local.yml' && c.reason === 'foreign_hook')).toBe(true);
   });
 
-  it('pins the workflow template Action tag to the CLI package version', () => {
+  it('pins the workflow template to the Action tag, which is not the package version', () => {
     const yaml = githubWorkflowYaml();
     const match = yaml.match(/uses: vaultcompasshq\/vault-guard@(\S+)/);
     expect(match).not.toBeNull();
     const pin = (match as RegExpMatchArray)[1];
 
-    // Shape guard first: this must always look like a real semver tag, not
-    // e.g. an empty string or "vundefined" if readCliVersion() ever broke.
+    // Shape guard first: this must always look like a real semver tag, not e.g.
+    // an empty string or "vundefined".
     expect(pin).toMatch(/^v\d+\.\d+\.\d+$/);
 
-    // Then the actual pin: derived from the CLI's own package.json version at
-    // read time (not a hardcoded literal), so a version bump (e.g. the
-    // changeset in this repo bumping package.json to 1.4.2) can never make
-    // this test stale — both sides read the same file at test time.
-    expect(pin).toBe(`v${readCliVersion()}`);
+    // Then the actual pin, which comes from ACTION_TAG and DELIBERATELY not
+    // from readCliVersion().
+    //
+    // This test used to assert `v${readCliVersion()}`, and 1.7.1 is where that
+    // became wrong: an action-only release moves the tag and leaves the
+    // packages alone, so the derived pin would have scaffolded `@v1.7.0` — the
+    // action that installs its scanner from inside the tree it scans — into
+    // every repository that ran `vault-guard init` after the release. The tag
+    // says which version of the workflow step; the package version says which
+    // scanner. They are allowed to differ and here they do.
+    expect(pin).toBe(ACTION_TAG);
+    // A real tag is at or ahead of the packages, never behind: behind means
+    // somebody derived it from the package version again, or bumped the
+    // packages and forgot to move the tag.
+    const order = (a: number[], b: number[]): number =>
+      a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
+    const tagParts = pin.slice(1).split('.').map(Number);
+    const pkgParts = readCliVersion().split('.').map(Number);
+    expect([pin, readCliVersion(), order(tagParts, pkgParts) >= 0]).toEqual([
+      pin,
+      readCliVersion(),
+      true,
+    ]);
+  });
+
+  it('scaffolds no `version` input, because the Action tag carries the scanner pin', () => {
+    // `version: latest` was in this template and is now REFUSED by the action:
+    // a dist-tag hands the choice of scanner to the registry on the morning of
+    // the run. A generated workflow that fails on its first run is worse than
+    // the thing it was generated for, so the input is gone rather than pinned
+    // to a number that would then be a second pin to keep in step with the tag.
+    const yaml = githubWorkflowYaml();
+    expect(yaml).not.toMatch(/^\s*version:\s*latest\s*$/m);
+    expect(yaml).not.toMatch(/^\s*version:\s/m);
   });
 
   describe('husky-generated hooks dir (husky 9)', () => {

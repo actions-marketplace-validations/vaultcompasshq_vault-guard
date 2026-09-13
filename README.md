@@ -248,17 +248,51 @@ jobs:
           # Required on pull requests: pull-request mode reads the config and
           # the baseline from the base branch, which a shallow clone does not have.
           fetch-depth: 0
-      - uses: vaultcompasshq/vault-guard@v1.7.0
+      - uses: vaultcompasshq/vault-guard@v1.7.1
+        id: vault-guard
         with:
-          version: latest
           path: .
           format: sarif
           sarif-output: vault-guard-results.sarif
       - uses: github/codeql-action/upload-sarif@v3
-        if: always()
+        # Guarded on the output being non-empty: a run that could not scan at
+        # all writes no document, and handing that empty file to the uploader
+        # fails the job with a parse error on top of the real message.
+        if: always() && steps.vault-guard.outputs.results-file != ''
         with:
           sarif_file: vault-guard-results.sarif
 ```
+
+No `version` input in that example, because the default is the scanner version
+this Action tag shipped with. Leaving it out is the recommended shape: the tag
+then decides the scanner, and there is one pin to bump instead of two that can
+disagree.
+
+**The Action tag and the scanner version are separate numbers, and they do not
+have to match.** `vaultcompasshq/vault-guard@v1.7.1` installs
+`@vaultcompass/vault-guard@1.7.0`, because that release changed the Action and
+nothing in the scanner, so there was no new scanner to publish. Read the tag as
+"which version of the workflow step", not as "which version of the scanner".
+
+### Where the scanner comes from
+
+The Action installs `@vaultcompass/vault-guard` from the registry into a prefix
+under the runner temp and calls that copy by absolute path. It never runs the
+checkout's own `node_modules`, and never starts npm with the checkout as its
+working directory, so neither a committed `.npmrc` nor a package the head's
+lockfile put in `node_modules` can decide which program does the scanning. Up to
+and including `@v1.7.0` it ran `npx` from inside the checkout, and either of
+those two files was enough for a pull request to choose the program that judged
+it.
+
+`version` no longer accepts a dist-tag, and no longer defaults to `latest`. Two
+reasons. A tag means the scanner judging a pull request is whichever one the
+registry served that morning rather than one decided in the workflow file. And
+npm reads a value beginning with a dot, or ending in `.tgz`, as a PATH rather
+than a version, which on a run that started inside the checkout was one
+committed file away from the tree handing over its own scanner. **If you were
+relying on the old `latest` default, remove the input**; a dist-tag is refused
+with a message saying so.
 
 Details: **[docs/GITHUB_ACTION.md](./docs/GITHUB_ACTION.md)**. Branch protection setup: **[docs/GITHUB_BRANCH_PROTECTION.md](./docs/GITHUB_BRANCH_PROTECTION.md)**.
 
@@ -416,6 +450,15 @@ JSON Schema for editor autocomplete: **[schemas/vault-guard-config.json](./schem
 > so an off switch would be settable by the pull request it judges. If you are
 > not ready to change the checkout, stay pinned to
 > `vaultcompasshq/vault-guard@v1.6.0` until you are.
+
+> **Also moving to `@v1.7.1`.** It is an action-only release: the tag moves, the
+> npm packages stay at 1.7.0. Two things change in a workflow. The `version`
+> input takes an EXACT version now and refuses a dist-tag, so **delete
+> `version: latest`** if you have it — the default is the scanner this tag
+> shipped with. And the `results-file` output is empty when the scan wrote no
+> document, so a chained `upload-sarif` should be guarded on it rather than run
+> unconditionally. Pinning `@v1.7.0` keeps the old Action, the one that installs
+> its scanner from inside the tree it scans.
 
 **Baseline**: fingerprint accepted findings so new issues still fail the gate:
 

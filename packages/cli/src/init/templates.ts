@@ -1,7 +1,24 @@
-import { readCliVersion } from '../version';
-
 /** Stable init template version; bump when file contents change materially. */
-export const INIT_TEMPLATE_VERSION = '3';
+export const INIT_TEMPLATE_VERSION = '4';
+
+/**
+ * The Action tag the generated workflow pins, which is NOT the CLI package
+ * version and must not be derived from it.
+ *
+ * This used to read `v${readCliVersion()}`, and 1.7.1 is where that broke: it
+ * is an action-only release, so the tag moved to v1.7.1 while the packages
+ * stayed at 1.7.0. Deriving the pin from the package version would have
+ * scaffolded `@v1.7.0` — the action that installs its scanner from inside the
+ * tree it scans, which is the vulnerability 1.7.1 exists to close — into every
+ * repository that ran `vault-guard init` after the release.
+ *
+ * Read the tag as "which version of the workflow step", not as "which version
+ * of the scanner". Bump it whenever a release moves the Action tag, package
+ * release or action-only alike; `init.test.ts` pins the shape and the
+ * separation, and docs/INVARIANTS.md lists every other place either number
+ * appears.
+ */
+export const ACTION_TAG = 'v1.7.1';
 
 export const MANIFEST_RELATIVE_PATH = '.vault-guard/manifest.json';
 
@@ -69,9 +86,13 @@ jobs:
           # makes the scan exit 2 rather than fall back to trusting the pull
           # request, so this line is required, not an optimisation.
           fetch-depth: 0
-      - uses: vaultcompasshq/vault-guard@v${readCliVersion()}
+      - uses: vaultcompasshq/vault-guard@${ACTION_TAG}
         with:
-          version: latest
+          # No \`version\` input on purpose. It takes an EXACT scanner version
+          # now and defaults to the one this Action tag shipped with, so the tag
+          # above is the only pin to keep up to date. \`version: latest\` is
+          # refused: a dist-tag hands the choice of scanner to the registry on
+          # the morning of the run.
           path: .
           format: sarif
           sarif-output: vault-guard-results.sarif
