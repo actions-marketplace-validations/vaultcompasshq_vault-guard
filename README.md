@@ -367,7 +367,10 @@ would ship with its own off switch on the untrusted side. Base-ref judging is
 the floor; the only kind of change the input accepts is a tightening. If you
 need 1.6.0 behaviour while you arrange `fetch-depth: 0`, stay pinned to
 `vaultcompasshq/vault-guard@v1.6.0` until you are ready, which is a choice a
-maintainer makes on a protected branch.
+maintainer makes on a protected branch — knowing what it costs: **every tag
+before `@v1.7.1` installs its scanner with `npx` from inside the checkout**, so
+a pull request can choose the program that scans it. Pinning back trades that
+boundary for time on a one-line checkout change.
 
 **The workflow file itself has to be protected, deliberately.** On a same-repo
 `pull_request` event GitHub runs the workflow from the pull request head, so the
@@ -449,7 +452,9 @@ JSON Schema for editor autocomplete: **[schemas/vault-guard-config.json](./schem
 > `pull_request` event GitHub runs the workflow file from the pull request head,
 > so an off switch would be settable by the pull request it judges. If you are
 > not ready to change the checkout, stay pinned to
-> `vaultcompasshq/vault-guard@v1.6.0` until you are.
+> `vaultcompasshq/vault-guard@v1.6.0` until you are — but know the trade: every
+> tag before `@v1.7.1` installs its scanner from inside the checkout it scans,
+> so a pull request can choose the program that judges it.
 
 > **Also moving to `@v1.7.1`.** It is an action-only release: the tag moves, the
 > npm packages stay at 1.7.0. Two things change in a workflow. The `version`

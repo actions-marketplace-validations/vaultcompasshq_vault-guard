@@ -51,9 +51,18 @@ rather than of this repository, and is not what the boundary should rest on.
 **Enforced by:** `packages/cli/src/__tests__/action/action-run-script.test.ts`
 (runs both steps with npm stubbed, recording npm's argv, cwd and prefix),
 `packages/cli/src/__tests__/action/action-path-validation.test.ts` (the steps
-exist at all, and neither runs npx), `scripts/test-action-path-validation.sh`
-(the same guards, on a macOS runner), and `bench/action-install.cjs` (real npm,
+exist at all, and neither runs npx), and `bench/action-install.cjs` (real npm,
 two local registries, both routes mounted).
+
+`scripts/test-action-path-validation.sh` also runs on a macOS runner, where the
+jest suites do not, and what it carries is two different things. Its grep guards
+read the real `action.yml`, and its per-step checks ask the real file through
+`scripts/extract-action-step.cjs`, so neither can drift. Its `validate_path`,
+`validate_version` and `validate_trust_base` functions are **hand copies** of
+the ones in `action.yml`, kept there because the point is to run those idioms
+under bash 3.2, and a copy can drift from its original: read a green run of that
+file as "these idioms are portable", not as "action.yml still contains them".
+The grep guards beside them are what keep the second claim true.
 
 **What this does NOT cover**, and the comment in `action.yml` says so: a pull
 request can edit the workflow file, because a `pull_request` run uses the
@@ -91,6 +100,47 @@ blaming a `fetch-depth` the caller already set.
 `scripts/test-action-path-validation.sh`, and by the `filesScanned` field
 recorded per case in `bench/baseline.action-install.json` — a run that scans
 nothing shows up there as a number, not as a passing test.
+
+## The output path is checked as a path, not as a string
+
+`sarif-output` names a file the action WRITES, into a tree the head controls, so
+the string rules are not the whole check. It may not resolve under `.github/`,
+which holds the workflow file and the CODEOWNERS entry that decide how this gate
+runs, and it may not resolve through a symlink at the file or at any directory
+on the way to it — checked before `mkdir -p`, so a refused run has not already
+created directories through the link.
+
+Every guard here compares strings, so every SECOND NAME for the same file has to
+be normalised away first, to a fixed point: a `./` prefix, an interior `/./`, a
+doubled slash, a different case (macOS filesystems are case-insensitive), and a
+**trailing slash**. That last one is not only cosmetic: `test -L` FOLLOWS a
+symlink when the path it is given ends in a slash, so `out.sarif/` and
+`out.sarif` name the same file and only the first walked past the symlink guard,
+after which `dirname` returned the workspace and the loop ended having checked
+nothing. A value that normalises to nothing or to a single dot names a
+directory, and is refused with the input's name rather than left to fail as a
+shell redirect error deep in the run step.
+
+**Enforced by:** the `.github/`, symlink and directory cases in both action test
+files, including the trailing-slash spellings; the symlink case is proven by
+planting a real link and asserting nothing was written through it.
+
+## Only 0, 1 and 2 are verdicts, in the step's exit AND in its output
+
+126 and 127 are what the SHELL produces when a binary is missing or not
+executable, which is exactly what a failed install looks like from the run step.
+They are re-raised as 2, could-not-run, because reporting them as 1 would invent
+findings nobody found.
+
+The `exit-code` OUTPUT carries the mapped code too, not the raw status. A caller
+reads that output precisely to tell a verdict from a failure to reach one, and
+publishing a 127 the documented contract says cannot happen is the same bug one
+layer out. `results-file` is published only when the run wrote something, so a
+chained `upload-sarif` can be guarded on one expression instead of failing on an
+empty file with a parse error that buries the real message.
+
+**Enforced by:** the exit-code cases in `action-run-script.test.ts`, including
+one that never installs the binary at all and asserts the output reads 2.
 
 ## The `version` input takes an exact version only
 
@@ -133,17 +183,25 @@ or the other, as of 1.7.1:
 - `CHANGELOG.md`, the release heading and any migration line naming a tag
 - `bench/action-install.cjs`, `PRE_FIX_REF` — the tag the negative control reads
   its vulnerable `action.yml` out of, which must stay the release BEFORE the fix
+- `bench/baseline.action-install.json`, `scannerVersion` and the case ids —
+  the recorded run embeds both numbers, so a scanner bump or a new `PRE_FIX_REF`
+  makes the baseline stale and `--compare` says so rather than a human noticing
 
 The init template's pin used to be `v${readCliVersion()}`, derived from the CLI
 package version. An action-only release is exactly where that breaks: it would
 have scaffolded `@v1.7.0`, the pre-fix Action, into every repository
-initialised after the release. It is a constant now, and `init.test.ts` asserts
-it is not the package version and is never behind it.
+initialised after the release. It is a constant now.
 
-**Enforced by:** `init.test.ts` (the template pin), and the
-`defaults to the scanner version this repository publishes` case in
-`action-path-validation.test.ts` (the `version` default against
-`packages/cli/package.json`). The rest of the list is a grep, not a gate.
+**Enforced by:** `init.test.ts`, which asserts three things about that constant:
+the generated workflow pins it rather than anything derived from the package
+version; it is not BEHIND the package version by semver ordering (equal is legal
+— a package release moves both numbers together); and it equals `v` plus the
+newest `## [X.Y.Z]` heading in `CHANGELOG.md`, which is what catches a second
+action-only release that moved the tag and the changelog and forgot the
+scaffold. Plus the `defaults to the scanner version this repository publishes`
+case in `action-path-validation.test.ts`, which ties the `version` input's
+default to `packages/cli/package.json`. The rest of the list is a grep, not a
+gate.
 
 ## Testing the Action derives every step's environment and cwd from action.yml
 
@@ -153,11 +211,19 @@ carry the whole install boundary are "which directory is npm started in" and
 "which prefix does it install under", and a harness that supplies those cannot
 see them go missing.
 
-Both the jest suites and `bench/action-install.cjs` read the step script, the
+The jest suites, `bench/action-install.cjs` and the shell script's own per-step
+checks (through `scripts/extract-action-step.cjs`) all read the step script, the
 step's `env:` mapping and its `working-directory:` out of `action.yml` through
 one shared parser, `scripts/lib/action-steps.cjs`. A second copy of that parser
-would drift, and the drift would be invisible: both callers would keep passing,
+would drift, and the drift would be invisible: every caller would keep passing,
 each against its own idea of what the file says.
+
+That extends to values a harness might be tempted to know for itself. The
+dogfood harness reads the install PREFIX out of the install step's `env:`
+mapping rather than rebuilding `<runner temp>/vault-guard-action`: hardcoded,
+the record would go on reporting an install under the runner prefix even after
+`action.yml` moved it into the workspace, which is the one claim that record
+exists to carry.
 
 `VG_ACTION_FILE` points both suites at a mutated copy, so any of this can be
 made to fail on demand. Both files honour it; one of them not honouring it would
@@ -180,4 +246,9 @@ invisible from Linux, where the broken spelling works:
 
 **Enforced by:** `scripts/test-action-path-validation.sh`, which the
 `action-path-validation` CI job runs on `macos-latest` as well as
-`ubuntu-latest`, plus a textual guard in `action-path-validation.test.ts`.
+`ubuntu-latest`. It extracts each step's run script through
+`scripts/extract-action-step.cjs` and runs `bash -n` over it, so on the macOS
+runner the whole file is parsed by the bash version the claim is about. That is
+the enforcement; the textual guards against `${x,,}` and `${x^^}` here and in
+`action-path-validation.test.ts` are a faster, narrower net that only ever
+catches the idioms already on the list, and they name the bug when they fire.

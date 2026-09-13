@@ -101,6 +101,14 @@ If you are not ready to add `fetch-depth: 0` to your checkout, stay pinned to
 maintainer makes on a protected branch, which is exactly what an off switch in a
 PR-controlled file is not.
 
+**What pinning back costs, stated plainly:** every tag before `@v1.7.1`,
+`@v1.6.0` included, installs the scanner with `npx` from inside the checkout, so
+a pull request can choose the program that scans it — with a committed `.npmrc`
+or a copy in its own `node_modules`. See [Where the scanner comes
+from](#where-the-scanner-comes-from). Adding `fetch-depth: 0` is a one-line
+change to a workflow file and gives up nothing; pinning back gives up that
+boundary for as long as it lasts.
+
 Two requirements on the calling workflow, and neither can be met from inside
 this action:
 

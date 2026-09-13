@@ -93,10 +93,18 @@ that installs the scanner from inside the checkout. Move to `@v1.7.1`.
   directory on the way to it, checked before the containing directories are
   created rather than after. The head controls those, and a symlink there sends
   the write outside the workspace.
-- **`vault-guard init` scaffolds `@v1.7.1` and no `version` input.** The
-  template's Action pin used to be derived from the CLI package version, which
-  would have scaffolded the pre-fix Action into every repository initialised
-  after this release.
+- **`sarif-output` must name a file.** A value that normalises to nothing or to
+  a single dot (`.`, `./`) is a directory, and is refused with the input's name
+  rather than left to fail as a shell redirect error deep in the run step. A
+  trailing slash is normalised away everywhere, because `test -L` follows a
+  symlink when the path ends in one, so `out.sarif/` walked past the symlink
+  guard that `out.sarif` does not.
+- **`vault-guard init` scaffolds `@v1.7.1`, no `version` input, and the guarded
+  upload shape** — the scan step carries an `id`, and the `upload-sarif` step is
+  gated on its `results-file` output being non-empty and pinned to a full commit
+  SHA rather than the mutable `v3` tag. The template's Action pin used to be
+  derived from the CLI package version, which would have scaffolded the pre-fix
+  Action into every repository initialised after this release.
 
 ## [1.7.0] - 2026-09-06
 

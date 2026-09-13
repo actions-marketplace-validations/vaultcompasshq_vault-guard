@@ -226,7 +226,9 @@ const TRUST_BASE_UPGRADE_NOTE =
   'same-repo pull_request event runs the workflow file from the pull request ' +
   'head, so an off switch would be settable by the pull request it judges; if ' +
   'you are not ready to change the checkout, stay pinned to ' +
-  'vaultcompasshq/vault-guard@v1.6.0 until you are. Second, an unknown ' +
+  'vaultcompasshq/vault-guard@v1.6.0 until you are, knowing the trade: every ' +
+  'tag before v1.7.1 installs the scanner from inside the checkout it scans, ' +
+  'so a pull request can choose the program that judges it. Second, an unknown ' +
   'top-level key in .vault-guard.json now fails the run rather than being ' +
   'dropped in silence, so run "vault-guard config validate" once and remove ' +
   'whatever it names.';

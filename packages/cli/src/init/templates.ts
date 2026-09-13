@@ -20,6 +20,19 @@ export const INIT_TEMPLATE_VERSION = '4';
  */
 export const ACTION_TAG = 'v1.7.1';
 
+/**
+ * `github/codeql-action/upload-sarif`, pinned to a full commit SHA rather than
+ * the mutable `v3` tag this template used to scaffold.
+ *
+ * A tag is a moving reference: the code that runs in the consumer's repository,
+ * with the consumer's `security-events: write`, is whatever that tag points at
+ * on the day of the run. It is the same reasoning the `version` input now
+ * applies to the scanner, and the same SHA this repository's own `ci.yml` pins,
+ * so there is one value to bump rather than two spellings of it.
+ */
+export const UPLOAD_SARIF_SHA = '99df26d4f13ea111d4ec1a7dddef6063f76b97e9';
+export const UPLOAD_SARIF_TAG = 'v4.37.0';
+
 export const MANIFEST_RELATIVE_PATH = '.vault-guard/manifest.json';
 
 export const MANAGED_FILE_PATHS = [
@@ -87,6 +100,7 @@ jobs:
           # request, so this line is required, not an optimisation.
           fetch-depth: 0
       - uses: vaultcompasshq/vault-guard@${ACTION_TAG}
+        id: vault-guard
         with:
           # No \`version\` input on purpose. It takes an EXACT scanner version
           # now and defaults to the one this Action tag shipped with, so the tag
@@ -96,10 +110,15 @@ jobs:
           path: .
           format: sarif
           sarif-output: vault-guard-results.sarif
-      - uses: github/codeql-action/upload-sarif@v3
-        if: always()
+      - uses: github/codeql-action/upload-sarif@${UPLOAD_SARIF_SHA} # ${UPLOAD_SARIF_TAG}
+        # always(), so a scan that found something still gets its findings into
+        # code scanning -- and guarded on the output being non-empty, because a
+        # run that could not scan at all writes no document. Handing that empty
+        # file to the uploader fails the job with a SARIF parse error sitting on
+        # top of the real message.
+        if: always() && steps.vault-guard.outputs.results-file != ''
         with:
-          sarif_file: vault-guard-results.sarif
+          sarif_file: \${{ steps.vault-guard.outputs.results-file }}
 `;
 }
 

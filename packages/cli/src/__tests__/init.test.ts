@@ -327,6 +327,49 @@ describe('vault-guard init', () => {
     ]);
   });
 
+  it('keeps ACTION_TAG in step with the newest CHANGELOG release', () => {
+    // The staleness this cannot otherwise catch: a SECOND action-only release
+    // moves the tag and the CHANGELOG, and nothing makes anybody open
+    // templates.ts. The scaffold would then keep handing new repositories the
+    // previous Action — which for 1.7.1 specifically means the one that
+    // installs its scanner from inside the tree it scans.
+    //
+    // The newest `## [X.Y.Z]` heading is the release this working tree
+    // describes; `## [Unreleased]` is skipped because it is not a release.
+    const changelog = fs.readFileSync(
+      path.join(__dirname, '..', '..', '..', '..', 'CHANGELOG.md'),
+      'utf-8',
+    );
+    const newest = changelog.match(/^## \[(\d+\.\d+\.\d+)\]/m);
+    expect(newest).not.toBeNull();
+    expect(ACTION_TAG).toBe(`v${(newest as RegExpMatchArray)[1]}`);
+  });
+
+  it('scaffolds the guarded upload shape, with the uploader pinned to a SHA', () => {
+    // The generated workflow has to be the shape the docs tell people to write.
+    // A bare `if: always()` upload fails the job on the empty file a
+    // could-not-run scan leaves behind, with a SARIF parse error sitting on top
+    // of the real message — the exact confusion the non-empty `results-file`
+    // output was added to remove.
+    const yaml = githubWorkflowYaml();
+    expect(yaml).toContain('id: vault-guard');
+    expect(yaml).toContain("if: always() && steps.vault-guard.outputs.results-file != ''");
+    expect(yaml).toContain('sarif_file: ${{ steps.vault-guard.outputs.results-file }}');
+
+    // And the uploader is pinned to a commit, not to `v3`. It runs in the
+    // consumer's repository with the consumer's `security-events: write`, so a
+    // mutable tag there is the same bet the `version` input stopped taking.
+    const uses = yaml.match(/uses:\s*(\S+)/g) ?? [];
+    expect(uses.length).toBeGreaterThan(0);
+    for (const entry of uses) {
+      const ref = entry.replace(/^uses:\s*/, '');
+      // The action's own tag is a release tag by design; everything else is a
+      // third-party action and must be a full SHA.
+      if (ref.startsWith('vaultcompasshq/vault-guard@')) continue;
+      expect([ref, /@[0-9a-f]{40}$/.test(ref)]).toEqual([ref, true]);
+    }
+  });
+
   it('scaffolds no `version` input, because the Action tag carries the scanner pin', () => {
     // `version: latest` was in this template and is now REFUSED by the action:
     // a dist-tag hands the choice of scanner to the registry on the morning of
