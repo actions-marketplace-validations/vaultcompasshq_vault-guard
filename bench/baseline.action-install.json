@@ -1,0 +1,360 @@
+{
+  "version": 1,
+  "scannerVersion": "1.7.0",
+  "cases": [
+    {
+      "id": "current--npmrc-and-planted-copy",
+      "action": "current",
+      "scenario": "npmrc-and-planted-copy",
+      "observed": {
+        "scannerThatRan": "installed-real",
+        "steps": {
+          "install": {
+            "present": true,
+            "status": 0
+          },
+          "run": {
+            "present": true,
+            "status": 1
+          }
+        },
+        "markers": {
+          "hostileRegistryCopyRan": false,
+          "plantedCopyRan": false
+        },
+        "evilRegistry": {
+          "requestCount": 0,
+          "paths": []
+        },
+        "legitRegistry": {
+          "contacted": true,
+          "paths": [
+            "/@vaultcompass/vault-guard",
+            "/@vaultcompass/vault-guard-core",
+            "/@vaultcompass/vault-guard-core/-/vault-guard-core-1.7.0.tgz",
+            "/@vaultcompass/vault-guard-telemetry",
+            "/@vaultcompass/vault-guard-telemetry/-/vault-guard-telemetry-1.7.0.tgz",
+            "/@vaultcompass/vault-guard/-/vault-guard-1.7.0.tgz",
+            "/ansi-styles",
+            "/ansi-styles/-/ansi-styles-4.3.0.tgz",
+            "/better-sqlite3",
+            "/chalk",
+            "/chalk/-/chalk-4.1.2.tgz",
+            "/color-convert",
+            "/color-convert/-/color-convert-2.0.1.tgz",
+            "/color-name",
+            "/color-name/-/color-name-1.1.4.tgz",
+            "/commander",
+            "/commander/-/commander-12.1.0.tgz",
+            "/has-flag",
+            "/has-flag/-/has-flag-4.0.0.tgz",
+            "/ignore",
+            "/ignore/-/ignore-5.3.2.tgz",
+            "/supports-color",
+            "/supports-color/-/supports-color-7.2.0.tgz"
+          ]
+        },
+        "installedScanner": {
+          "present": true,
+          "underRunnerPrefix": true,
+          "version": "1.7.0"
+        },
+        "sarif": {
+          "kind": "real-scanner",
+          "ruleIds": [
+            "anthropic"
+          ],
+          "ruleCatalogue": 1,
+          "filesScanned": 3
+        },
+        "gate": {
+          "exitCode": "1",
+          "resultsFileRecorded": true
+        }
+      }
+    },
+    {
+      "id": "current--npmrc-only",
+      "action": "current",
+      "scenario": "npmrc-only",
+      "observed": {
+        "scannerThatRan": "installed-real",
+        "steps": {
+          "install": {
+            "present": true,
+            "status": 0
+          },
+          "run": {
+            "present": true,
+            "status": 1
+          }
+        },
+        "markers": {
+          "hostileRegistryCopyRan": false,
+          "plantedCopyRan": false
+        },
+        "evilRegistry": {
+          "requestCount": 0,
+          "paths": []
+        },
+        "legitRegistry": {
+          "contacted": true,
+          "paths": [
+            "/@vaultcompass/vault-guard",
+            "/@vaultcompass/vault-guard-core",
+            "/@vaultcompass/vault-guard-core/-/vault-guard-core-1.7.0.tgz",
+            "/@vaultcompass/vault-guard-telemetry",
+            "/@vaultcompass/vault-guard-telemetry/-/vault-guard-telemetry-1.7.0.tgz",
+            "/@vaultcompass/vault-guard/-/vault-guard-1.7.0.tgz",
+            "/ansi-styles",
+            "/ansi-styles/-/ansi-styles-4.3.0.tgz",
+            "/better-sqlite3",
+            "/chalk",
+            "/chalk/-/chalk-4.1.2.tgz",
+            "/color-convert",
+            "/color-convert/-/color-convert-2.0.1.tgz",
+            "/color-name",
+            "/color-name/-/color-name-1.1.4.tgz",
+            "/commander",
+            "/commander/-/commander-12.1.0.tgz",
+            "/has-flag",
+            "/has-flag/-/has-flag-4.0.0.tgz",
+            "/ignore",
+            "/ignore/-/ignore-5.3.2.tgz",
+            "/supports-color",
+            "/supports-color/-/supports-color-7.2.0.tgz"
+          ]
+        },
+        "installedScanner": {
+          "present": true,
+          "underRunnerPrefix": true,
+          "version": "1.7.0"
+        },
+        "sarif": {
+          "kind": "real-scanner",
+          "ruleIds": [
+            "anthropic"
+          ],
+          "ruleCatalogue": 1,
+          "filesScanned": 3
+        },
+        "gate": {
+          "exitCode": "1",
+          "resultsFileRecorded": true
+        }
+      }
+    },
+    {
+      "id": "current--scoped-npmrc-only",
+      "action": "current",
+      "scenario": "scoped-npmrc-only",
+      "observed": {
+        "scannerThatRan": "installed-real",
+        "steps": {
+          "install": {
+            "present": true,
+            "status": 0
+          },
+          "run": {
+            "present": true,
+            "status": 1
+          }
+        },
+        "markers": {
+          "hostileRegistryCopyRan": false,
+          "plantedCopyRan": false
+        },
+        "evilRegistry": {
+          "requestCount": 0,
+          "paths": []
+        },
+        "legitRegistry": {
+          "contacted": true,
+          "paths": [
+            "/@vaultcompass/vault-guard",
+            "/@vaultcompass/vault-guard-core",
+            "/@vaultcompass/vault-guard-core/-/vault-guard-core-1.7.0.tgz",
+            "/@vaultcompass/vault-guard-telemetry",
+            "/@vaultcompass/vault-guard-telemetry/-/vault-guard-telemetry-1.7.0.tgz",
+            "/@vaultcompass/vault-guard/-/vault-guard-1.7.0.tgz",
+            "/ansi-styles",
+            "/ansi-styles/-/ansi-styles-4.3.0.tgz",
+            "/better-sqlite3",
+            "/chalk",
+            "/chalk/-/chalk-4.1.2.tgz",
+            "/color-convert",
+            "/color-convert/-/color-convert-2.0.1.tgz",
+            "/color-name",
+            "/color-name/-/color-name-1.1.4.tgz",
+            "/commander",
+            "/commander/-/commander-12.1.0.tgz",
+            "/has-flag",
+            "/has-flag/-/has-flag-4.0.0.tgz",
+            "/ignore",
+            "/ignore/-/ignore-5.3.2.tgz",
+            "/supports-color",
+            "/supports-color/-/supports-color-7.2.0.tgz"
+          ]
+        },
+        "installedScanner": {
+          "present": true,
+          "underRunnerPrefix": true,
+          "version": "1.7.0"
+        },
+        "sarif": {
+          "kind": "real-scanner",
+          "ruleIds": [
+            "anthropic"
+          ],
+          "ruleCatalogue": 1,
+          "filesScanned": 3
+        },
+        "gate": {
+          "exitCode": "1",
+          "resultsFileRecorded": true
+        }
+      }
+    },
+    {
+      "id": "v1.7.0--npmrc-and-planted-copy",
+      "action": "v1.7.0",
+      "scenario": "npmrc-and-planted-copy",
+      "observed": {
+        "scannerThatRan": "planted-copy",
+        "steps": {
+          "install": {
+            "present": false,
+            "status": null
+          },
+          "run": {
+            "present": true,
+            "status": 0
+          }
+        },
+        "markers": {
+          "hostileRegistryCopyRan": false,
+          "plantedCopyRan": true
+        },
+        "evilRegistry": {
+          "requestCount": 0,
+          "paths": []
+        },
+        "legitRegistry": {
+          "contacted": false,
+          "paths": []
+        },
+        "installedScanner": {
+          "present": false,
+          "underRunnerPrefix": false,
+          "version": null
+        },
+        "sarif": {
+          "kind": "stand-in",
+          "ruleIds": [],
+          "ruleCatalogue": 0,
+          "filesScanned": null
+        },
+        "gate": {
+          "exitCode": "0",
+          "resultsFileRecorded": true
+        }
+      }
+    },
+    {
+      "id": "v1.7.0--npmrc-only",
+      "action": "v1.7.0",
+      "scenario": "npmrc-only",
+      "observed": {
+        "scannerThatRan": "hostile-registry",
+        "steps": {
+          "install": {
+            "present": false,
+            "status": null
+          },
+          "run": {
+            "present": true,
+            "status": 0
+          }
+        },
+        "markers": {
+          "hostileRegistryCopyRan": true,
+          "plantedCopyRan": false
+        },
+        "evilRegistry": {
+          "requestCount": 3,
+          "paths": [
+            "/@vaultcompass/vault-guard",
+            "/@vaultcompass/vault-guard/-/vault-guard-1.7.0.tgz"
+          ]
+        },
+        "legitRegistry": {
+          "contacted": false,
+          "paths": []
+        },
+        "installedScanner": {
+          "present": false,
+          "underRunnerPrefix": false,
+          "version": null
+        },
+        "sarif": {
+          "kind": "stand-in",
+          "ruleIds": [],
+          "ruleCatalogue": 0,
+          "filesScanned": null
+        },
+        "gate": {
+          "exitCode": "0",
+          "resultsFileRecorded": true
+        }
+      }
+    },
+    {
+      "id": "v1.7.0--scoped-npmrc-only",
+      "action": "v1.7.0",
+      "scenario": "scoped-npmrc-only",
+      "observed": {
+        "scannerThatRan": "hostile-registry",
+        "steps": {
+          "install": {
+            "present": false,
+            "status": null
+          },
+          "run": {
+            "present": true,
+            "status": 0
+          }
+        },
+        "markers": {
+          "hostileRegistryCopyRan": true,
+          "plantedCopyRan": false
+        },
+        "evilRegistry": {
+          "requestCount": 3,
+          "paths": [
+            "/@vaultcompass/vault-guard",
+            "/@vaultcompass/vault-guard/-/vault-guard-1.7.0.tgz"
+          ]
+        },
+        "legitRegistry": {
+          "contacted": false,
+          "paths": []
+        },
+        "installedScanner": {
+          "present": false,
+          "underRunnerPrefix": false,
+          "version": null
+        },
+        "sarif": {
+          "kind": "stand-in",
+          "ruleIds": [],
+          "ruleCatalogue": 0,
+          "filesScanned": null
+        },
+        "gate": {
+          "exitCode": "0",
+          "resultsFileRecorded": true
+        }
+      }
+    }
+  ]
+}

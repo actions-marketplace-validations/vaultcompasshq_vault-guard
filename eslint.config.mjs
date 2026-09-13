@@ -66,6 +66,15 @@ export default [
         require: 'readonly',
         module: 'readonly',
         exports: 'writable',
+        // The action-install dogfood harness runs HTTP servers and a timeout
+        // around each spawned step, so it reaches for the globals a plain
+        // script-transform never needed.
+        Buffer: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        setInterval: 'readonly',
+        clearInterval: 'readonly',
+        URL: 'readonly',
       },
     },
   },

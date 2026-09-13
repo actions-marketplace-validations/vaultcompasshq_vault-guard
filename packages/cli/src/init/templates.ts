@@ -1,7 +1,37 @@
-import { readCliVersion } from '../version';
-
 /** Stable init template version; bump when file contents change materially. */
-export const INIT_TEMPLATE_VERSION = '3';
+export const INIT_TEMPLATE_VERSION = '4';
+
+/**
+ * The Action tag the generated workflow pins, which is NOT the CLI package
+ * version and must not be derived from it.
+ *
+ * This used to read `v${readCliVersion()}`, and 1.7.1 is where that broke: it
+ * is an action-only release, so the tag moved to v1.7.1 while the packages
+ * stayed at 1.7.0. Deriving the pin from the package version would have
+ * scaffolded `@v1.7.0` — the action that installs its scanner from inside the
+ * tree it scans, which is the vulnerability 1.7.1 exists to close — into every
+ * repository that ran `vault-guard init` after the release.
+ *
+ * Read the tag as "which version of the workflow step", not as "which version
+ * of the scanner". Bump it whenever a release moves the Action tag, package
+ * release or action-only alike; `init.test.ts` pins the shape and the
+ * separation, and docs/INVARIANTS.md lists every other place either number
+ * appears.
+ */
+export const ACTION_TAG = 'v1.7.1';
+
+/**
+ * `github/codeql-action/upload-sarif`, pinned to a full commit SHA rather than
+ * the mutable `v3` tag this template used to scaffold.
+ *
+ * A tag is a moving reference: the code that runs in the consumer's repository,
+ * with the consumer's `security-events: write`, is whatever that tag points at
+ * on the day of the run. It is the same reasoning the `version` input now
+ * applies to the scanner, and the same SHA this repository's own `ci.yml` pins,
+ * so there is one value to bump rather than two spellings of it.
+ */
+export const UPLOAD_SARIF_SHA = '99df26d4f13ea111d4ec1a7dddef6063f76b97e9';
+export const UPLOAD_SARIF_TAG = 'v4.37.0';
 
 export const MANIFEST_RELATIVE_PATH = '.vault-guard/manifest.json';
 
@@ -61,6 +91,13 @@ on:
 jobs:
   secrets:
     runs-on: ubuntu-latest
+    # Declared explicitly, because the default GITHUB_TOKEN is read-only and the
+    # upload step below then fails with a 403 that says nothing about the scan.
+    # Declared narrowly for the same reason it is declared at all: this job
+    # reads your code and writes one code-scanning log, and nothing else.
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -69,16 +106,26 @@ jobs:
           # makes the scan exit 2 rather than fall back to trusting the pull
           # request, so this line is required, not an optimisation.
           fetch-depth: 0
-      - uses: vaultcompasshq/vault-guard@v${readCliVersion()}
+      - uses: vaultcompasshq/vault-guard@${ACTION_TAG}
+        id: vault-guard
         with:
-          version: latest
+          # No \`version\` input on purpose. It takes an EXACT scanner version
+          # now and defaults to the one this Action tag shipped with, so the tag
+          # above is the only pin to keep up to date. \`version: latest\` is
+          # refused: a dist-tag hands the choice of scanner to the registry on
+          # the morning of the run.
           path: .
           format: sarif
           sarif-output: vault-guard-results.sarif
-      - uses: github/codeql-action/upload-sarif@v3
-        if: always()
+      - uses: github/codeql-action/upload-sarif@${UPLOAD_SARIF_SHA} # ${UPLOAD_SARIF_TAG}
+        # always(), so a scan that found something still gets its findings into
+        # code scanning -- and guarded on the output being non-empty, because a
+        # run that could not scan at all writes no document. Handing that empty
+        # file to the uploader fails the job with a SARIF parse error sitting on
+        # top of the real message.
+        if: always() && steps.vault-guard.outputs.results-file != ''
         with:
-          sarif_file: vault-guard-results.sarif
+          sarif_file: \${{ steps.vault-guard.outputs.results-file }}
 `;
 }
 

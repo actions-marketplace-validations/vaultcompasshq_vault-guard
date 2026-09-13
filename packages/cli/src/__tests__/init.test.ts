@@ -10,6 +10,8 @@ import {
   revertInit,
 } from '../commands/init';
 import {
+  ACTION_TAG,
+  UPLOAD_SARIF_SHA,
   MANIFEST_RELATIVE_PATH,
   defaultVaultGuardConfigJson,
   githubWorkflowYaml,
@@ -291,21 +293,123 @@ describe('vault-guard init', () => {
     expect(plan.conflicts.some(c => c.path === 'lefthook-local.yml' && c.reason === 'foreign_hook')).toBe(true);
   });
 
-  it('pins the workflow template Action tag to the CLI package version', () => {
+  it('pins the workflow template to the Action tag, which is not the package version', () => {
     const yaml = githubWorkflowYaml();
     const match = yaml.match(/uses: vaultcompasshq\/vault-guard@(\S+)/);
     expect(match).not.toBeNull();
     const pin = (match as RegExpMatchArray)[1];
 
-    // Shape guard first: this must always look like a real semver tag, not
-    // e.g. an empty string or "vundefined" if readCliVersion() ever broke.
+    // Shape guard first: this must always look like a real semver tag, not e.g.
+    // an empty string or "vundefined".
     expect(pin).toMatch(/^v\d+\.\d+\.\d+$/);
 
-    // Then the actual pin: derived from the CLI's own package.json version at
-    // read time (not a hardcoded literal), so a version bump (e.g. the
-    // changeset in this repo bumping package.json to 1.4.2) can never make
-    // this test stale — both sides read the same file at test time.
-    expect(pin).toBe(`v${readCliVersion()}`);
+    // Then the actual pin, which comes from ACTION_TAG and DELIBERATELY not
+    // from readCliVersion().
+    //
+    // This test used to assert `v${readCliVersion()}`, and 1.7.1 is where that
+    // became wrong: an action-only release moves the tag and leaves the
+    // packages alone, so the derived pin would have scaffolded `@v1.7.0` — the
+    // action that installs its scanner from inside the tree it scans — into
+    // every repository that ran `vault-guard init` after the release. The tag
+    // says which version of the workflow step; the package version says which
+    // scanner. They are allowed to differ and here they do.
+    expect(pin).toBe(ACTION_TAG);
+    // A real tag is at or ahead of the packages, never behind: behind means
+    // somebody derived it from the package version again, or bumped the
+    // packages and forgot to move the tag.
+    const order = (a: number[], b: number[]): number =>
+      a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
+    const tagParts = pin.slice(1).split('.').map(Number);
+    const pkgParts = readCliVersion().split('.').map(Number);
+    expect([pin, readCliVersion(), order(tagParts, pkgParts) >= 0]).toEqual([
+      pin,
+      readCliVersion(),
+      true,
+    ]);
+  });
+
+  it('keeps ACTION_TAG in step with the newest CHANGELOG release', () => {
+    // The staleness this cannot otherwise catch: a SECOND action-only release
+    // moves the tag and the CHANGELOG, and nothing makes anybody open
+    // templates.ts. The scaffold would then keep handing new repositories the
+    // previous Action — which for 1.7.1 specifically means the one that
+    // installs its scanner from inside the tree it scans.
+    //
+    // The newest `## [X.Y.Z]` heading is the release this working tree
+    // describes; `## [Unreleased]` is skipped because it is not a release.
+    const changelog = fs.readFileSync(
+      path.join(__dirname, '..', '..', '..', '..', 'CHANGELOG.md'),
+      'utf-8',
+    );
+    const newest = changelog.match(/^## \[(\d+\.\d+\.\d+)\]/m);
+    expect(newest).not.toBeNull();
+    expect(ACTION_TAG).toBe(`v${(newest as RegExpMatchArray)[1]}`);
+  });
+
+  it('scaffolds the guarded upload shape, with the uploader pinned to a SHA', () => {
+    // The generated workflow has to be the shape the docs tell people to write.
+    // A bare `if: always()` upload fails the job on the empty file a
+    // could-not-run scan leaves behind, with a SARIF parse error sitting on top
+    // of the real message — the exact confusion the non-empty `results-file`
+    // output was added to remove.
+    const yaml = githubWorkflowYaml();
+    expect(yaml).toContain('id: vault-guard');
+    expect(yaml).toContain("if: always() && steps.vault-guard.outputs.results-file != ''");
+    expect(yaml).toContain('sarif_file: ${{ steps.vault-guard.outputs.results-file }}');
+
+    // And the uploader is pinned to a commit, not to `v3`. It runs in the
+    // consumer's repository with the consumer's `security-events: write`, so a
+    // mutable tag there is the same bet the `version` input stopped taking.
+    const uses = yaml.match(/uses:\s*(\S+)/g) ?? [];
+    expect(uses.length).toBeGreaterThan(0);
+    for (const entry of uses) {
+      const ref = entry.replace(/^uses:\s*/, '');
+      // The action's own tag is a release tag by design; everything else is a
+      // third-party action and must be a full SHA.
+      if (ref.startsWith('vaultcompasshq/vault-guard@')) continue;
+      expect([ref, /@[0-9a-f]{40}$/.test(ref)]).toEqual([ref, true]);
+    }
+  });
+
+  it('scaffolds the permissions the upload step needs, and no more', () => {
+    // The generated workflow uploads SARIF, and the default GITHUB_TOKEN is
+    // read-only: without this block the upload fails with a 403 that says
+    // nothing about the scan, on the first run, in every repository that ran
+    // init. Narrow on purpose too -- this job reads code and writes one
+    // code-scanning log.
+    const yaml = githubWorkflowYaml();
+    expect(yaml).toContain('permissions:');
+    expect(yaml).toContain('contents: read');
+    expect(yaml).toContain('security-events: write');
+    expect(yaml).not.toContain('permissions: write-all');
+  });
+
+  it('pins the uploader to the same SHA this repository pins', () => {
+    // Two spellings of one decision drift. ci.yml is where this repository
+    // decided which upload-sarif commit it trusts; the scaffold hands that same
+    // commit to every consumer, so it reads the value rather than carrying a
+    // second copy of it that nobody diffs.
+    const ci = fs.readFileSync(
+      path.join(__dirname, '..', '..', '..', '..', '.github', 'workflows', 'ci.yml'),
+      'utf-8',
+    );
+    const pinned = ci.match(/github\/codeql-action\/upload-sarif@([0-9a-f]{40})/);
+    expect(pinned).not.toBeNull();
+    expect(UPLOAD_SARIF_SHA).toBe((pinned as RegExpMatchArray)[1]);
+    expect(githubWorkflowYaml()).toContain(
+      `github/codeql-action/upload-sarif@${UPLOAD_SARIF_SHA}`,
+    );
+  });
+
+  it('scaffolds no `version` input, because the Action tag carries the scanner pin', () => {
+    // `version: latest` was in this template and is now REFUSED by the action:
+    // a dist-tag hands the choice of scanner to the registry on the morning of
+    // the run. A generated workflow that fails on its first run is worse than
+    // the thing it was generated for, so the input is gone rather than pinned
+    // to a number that would then be a second pin to keep in step with the tag.
+    const yaml = githubWorkflowYaml();
+    expect(yaml).not.toMatch(/^\s*version:\s*latest\s*$/m);
+    expect(yaml).not.toMatch(/^\s*version:\s/m);
   });
 
   describe('husky-generated hooks dir (husky 9)', () => {
