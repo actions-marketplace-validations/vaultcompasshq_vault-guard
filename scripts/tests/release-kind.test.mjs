@@ -217,19 +217,30 @@ describe('readActionVersionDefault', () => {
     expect(() => readActionVersionDefault(yml)).toThrow(/two|2 `default:`|ambiguous/i);
   });
 
-  // The real action.yml's `version` input currently defaults to a dist-tag
-  // (`latest`), not an exact package version -- a separate, concurrent
-  // change is moving it to exact-versions-only, at which point this
-  // default becomes an exact package version. Asserting the SHAPE (a
-  // parseable, non-empty default) rather than the literal value, or the
-  // EXACT_SEMVER shape that value does not have yet, is what keeps this
-  // canary honest through that migration without needing an edit in lockstep
-  // with it: the parser has to keep reading whatever the real file
-  // currently says, whichever of the two shapes that is.
-  it('reads the real action.yml and finds a non-empty version default', () => {
+  // BLOCKING BY DESIGN, and currently RED on this branch. This asserts the
+  // real action.yml's version default EQUALS the real packages/core
+  // version -- not merely that some non-empty default is found -- and
+  // action.yml's version input still defaults to "latest" (a dist-tag) as
+  // of this writing, while packages/core is at 1.7.0. With that mismatch,
+  // scripts/lib/release-kind.mjs's assertPackageReleaseDefault refuses a
+  // package release tag, refuses a workflow_dispatch run, AND (via the
+  // matching check on the action-only path) refuses an action-only tag
+  // alike -- every path this workflow has checks the default against the
+  // package version. A looser "just find a non-empty default" canary
+  // stayed green through that and hid it.
+  //
+  // fix/action-installs-outside-the-tree, a separate and concurrent
+  // branch, moves action.yml to exact-versions-only with default 1.7.0.
+  // This test is what makes CI encode the correct merge order: this
+  // branch must land AFTER that one, not before it, and a green run here
+  // is proof the prerequisite already merged rather than an assumption
+  // left in a comment for someone to trust.
+  it('reads the real action.yml and finds a default that matches the real package version', () => {
+    const version = JSON.parse(
+      readFileSync(path.join(ROOT, 'packages', 'core', 'package.json'), 'utf8')
+    ).version;
     const real = readActionVersionDefault(readFileSync(path.join(ROOT, 'action.yml'), 'utf8'));
-    expect(typeof real).toBe('string');
-    expect(real.length).toBeGreaterThan(0);
+    expect(real).toBe(version);
   });
 });
 
@@ -754,6 +765,28 @@ describe('.github/workflows/release.yml wiring', () => {
     const packageFlags = workflow.match(/--package "/g) ?? [];
     // Four packages, two invocations (tag push and workflow_dispatch).
     expect(packageFlags).toHaveLength(8);
+  });
+
+  it('keeps the decision step and the "Publish to npm" loop in the same set of packages', () => {
+    // The decision step reads each package.json by a literal path (see the
+    // test above); "Publish to npm" has to loop shell-side instead, over
+    // its own "for dir in ..." list, so nothing keeps the two lists in
+    // agreement automatically. Adding a fifth published package to one and
+    // not the other -- a real way for these to drift apart -- is exactly
+    // what this catches.
+    const decisionDirs = [...workflow.matchAll(/require\('\.\/packages\/([a-z0-9_-]+)\/package\.json'\)\.name/g)].map(
+      (match) => match[1]
+    );
+    expect(decisionDirs.length).toBeGreaterThan(0);
+
+    const forDirMatch = workflow.match(/for dir in ([^;]+); do/);
+    expect(forDirMatch).not.toBeNull();
+    const publishDirs = forDirMatch[1]
+      .trim()
+      .split(/\s+/)
+      .map((dir) => dir.replace(/^packages\//, ''));
+
+    expect(new Set(publishDirs)).toEqual(new Set(decisionDirs));
   });
 
   it('calls the decision script from a step with the id the conditions read', () => {
