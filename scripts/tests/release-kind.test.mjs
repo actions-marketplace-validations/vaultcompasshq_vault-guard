@@ -604,6 +604,13 @@ describe('.github/workflows/release.yml wiring', () => {
     'Publish to npm',
   ];
 
+  // Every step before the decision, in order. workflow_dispatch's branch
+  // guard has to be the very first step in the job -- it runs on
+  // github.event_name alone, needs nothing checked out, and the whole
+  // point is refusing a manual run before anything it would build or
+  // publish gets pulled down.
+  const STEPS_BEFORE_DECISION = ['Refuse workflow_dispatch from anywhere but main', 'Checkout code', 'Setup pnpm', 'Setup Node.js'];
+
   // Every step from the decision to the end of the release job, gated or
   // not, in order. The set assertion below cannot see a NEW ungated step
   // -- that is what this list is for: inserting anything after the
@@ -660,6 +667,36 @@ describe('.github/workflows/release.yml wiring', () => {
     const from = ids.indexOf('Decide the release kind, and refuse a tag that is neither');
     expect(from).toBeGreaterThan(-1);
     expect(ids.slice(from + 1)).toEqual(STEPS_AFTER_DECISION);
+  });
+
+  it('accounts for every step in the whole release job, from the workflow_dispatch guard onward, in order', () => {
+    // The fuller list, including the new first step: an insertion anywhere
+    // in the job -- before the decision as much as after it -- fails this
+    // until somebody says where it belongs.
+    const ids = releaseJobSteps().map((step) => step.id);
+    expect(ids).toEqual([
+      ...STEPS_BEFORE_DECISION,
+      'Decide the release kind, and refuse a tag that is neither',
+      ...STEPS_AFTER_DECISION,
+    ]);
+  });
+
+  it('refuses workflow_dispatch from anywhere but main, as the very first step, before checkout', () => {
+    const steps = releaseJobSteps();
+    expect(steps[0].id).toBe('Refuse workflow_dispatch from anywhere but main');
+    expect(steps[0].if).toBe("github.event_name == 'workflow_dispatch'");
+    expect(workflow).toContain('refs/heads/main');
+  });
+
+  it('checks ancestry only on the tag-triggered path, and only once', () => {
+    // Present at all, and present exactly once -- a second occurrence
+    // would mean it got duplicated onto a path that does not need it (the
+    // dispatch path is already covered by the branch guard above).
+    const ancestryChecks = workflow.match(/git merge-base --is-ancestor/g) ?? [];
+    expect(ancestryChecks).toHaveLength(1);
+    expect(workflow).toContain('git fetch origin main:refs/remotes/origin/main');
+    expect(workflow).toContain('git rev-parse --is-shallow-repository');
+    expect(workflow).toContain('git fetch --unshallow origin');
   });
 
   it('leaves tag resolution ungated, since both kinds of release cut a Release', () => {
@@ -722,6 +759,11 @@ describe('.github/workflows/release.yml wiring', () => {
   it('calls the decision script from a step with the id the conditions read', () => {
     expect(workflow).toMatch(/^ {4}- name: Decide the release kind[^\n]*\n {6}id: kind$/m);
     expect(workflow).toContain('node scripts/classify-release-tag.mjs');
+    // The ancestry check stays in bash, next to the git fetches it needs,
+    // and stays inside the tag-triggered branch: it applies to both kinds
+    // of tag, but workflow_dispatch has no tag at all and is covered by
+    // the branch guard above instead.
+    expect(workflow).toContain('git merge-base --is-ancestor');
   });
 });
 
