@@ -447,7 +447,45 @@ runs:
       run: |
         set -eu
         mkdir -p "${npm_config_prefix}"
-        npm install -g "@vaultcompass/vault-guard@${VG_VERSION}"
+
+        # `--ignore-scripts`, because this step runs on a runner holding the
+        # job's token and the thing being installed is a CONTROL INPUT. Without
+        # it, every package in the resolved tree gets arbitrary code execution
+        # here on every run, which is a strange amount of trust to extend from
+        # the tool whose job is deciding whether this repository can be
+        # trusted.
+        #
+        # It costs nothing. The only native dependency is `better-sqlite3`, it
+        # is an OPTIONAL dependency of the telemetry package, and the store
+        # degrades when its bindings are missing; `store-unavailable.test.ts`
+        # covers that case by name. A real global install with this flag scans
+        # a clean tree to the same bytes and the same exit 0 as one without it.
+        npm install -g --ignore-scripts "@vaultcompass/vault-guard@${VG_VERSION}"
+
+        # THEN VERIFY WHAT ARRIVED. The packages carry SLSA provenance
+        # attestations, published through the OIDC trusted-publisher path.
+        # Publishing attestations and never checking them buys nothing: until
+        # this line, the gate that decides whether a repository is carrying
+        # secrets installed itself unverified, so a compromised registry or
+        # publish account could replace the judge and no part of the run would
+        # have said so.
+        #
+        # Under `set -eu` this fails the step, which is the point: a scanner
+        # that cannot be verified must not go on to render a verdict. Ordering
+        # matters for the same reason -- before the install there is no tree to
+        # check, and after the scan it would be an audit note rather than a
+        # gate.
+        #
+        # WHAT IT PROVES IS BOUNDED, and worth being honest about. It verifies
+        # the registry signatures and attestations that EXIST; a dependency
+        # publishing neither is not a failure. So this raises the cost of
+        # substituting our own package, and does not certify the whole tree.
+        #
+        # Run from the prefix's `lib`, which is where a global install puts the
+        # tree npm reads. This is the Linux and macOS layout, the same
+        # assumption the PATH line below already makes.
+        cd "${npm_config_prefix}/lib"
+        npm audit signatures
 
     - name: Run vault-guard
       id: run

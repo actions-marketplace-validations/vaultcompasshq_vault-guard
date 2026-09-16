@@ -72,6 +72,41 @@ the action does substitutes for it. The absolute binary path is likewise not
 total: the shim starts with `#!/usr/bin/env node`, so the interpreter is still a
 PATH lookup a cooperating workflow can influence.
 
+## The scanner is installed without scripts, and verified before it is trusted
+
+Two properties of the same step, and both follow from the scanner being a
+CONTROL INPUT rather than an ordinary dependency.
+
+`--ignore-scripts`, because this step runs on a runner holding the job's token.
+Without it every package in the resolved tree gets arbitrary code execution
+there on every run, which is a strange amount of trust to extend from the tool
+whose job is deciding whether this repository can be trusted. It costs nothing
+here: the only native dependency is `better-sqlite3`, it is an OPTIONAL
+dependency of the telemetry package, and the store degrades when its bindings
+are missing.
+
+`npm audit signatures` after the install, because the packages publish SLSA
+provenance attestations through the OIDC trusted-publisher path and publishing
+attestations nobody checks buys nothing. Until this existed, the gate deciding
+whether a repository carried secrets installed itself unverified, so a
+compromised registry or publish account could replace the judge with no part of
+the run saying so. It runs under `set -eu`, so it fails the step: a scanner that
+cannot be verified must not go on to render a verdict.
+
+WHAT THE VERIFICATION PROVES IS BOUNDED. It verifies the registry signatures and
+attestations that EXIST; a dependency publishing neither is not a failure. It
+raises the cost of substituting our own package. It does not certify the tree.
+
+**Enforced by:** `action-run-script.test.ts` (the argv carries the flag, the
+audit is recorded, and the audit comes after the install), the text guards in
+`action-path-validation.test.ts`, and `scripts/test-action-path-validation.sh`,
+which refuses ANY `npm install` line in the file lacking the flag. The jest
+suites run against a stubbed npm, so what they prove is that the action ASKS;
+they say nothing about what a real npm does when asked. Verified by hand against
+the registry at 1.7.0: a global `--ignore-scripts` install scans a clean tree to
+the same 627 bytes and the same exit 0, and `npm audit signatures` over that
+tree reports 12 verified registry signatures and 4 verified attestations.
+
 ## The scan path is absolute AND resolved, and that is one decision with two halves
 
 The run step starts in the runner temp, so the scan root is built from

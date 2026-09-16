@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **The Action no longer runs install scripts, and verifies what it installed.**
+  The install step ran `npm install -g` with no `--ignore-scripts`, on a runner
+  holding the job's token, so every package in the resolved tree had arbitrary
+  code execution there on every run. It now passes `--ignore-scripts`, which
+  costs nothing here: the only native dependency is `better-sqlite3`, it is an
+  optional dependency of the telemetry package, and the store degrades when its
+  bindings are missing.
+
+  Separately, the packages publish SLSA provenance attestations through the OIDC
+  trusted-publisher path, and nothing checked them. The step now runs
+  `npm audit signatures` over the installed tree, under `set -eu`, so a scanner
+  that cannot be verified fails the step rather than going on to render a
+  verdict.
+
+  What the verification proves is bounded: it verifies the signatures and
+  attestations that exist, and a dependency publishing neither is not a failure.
+  It raises the cost of substituting our own package; it does not certify the
+  whole tree.
+
+  Reported by a consumer, which declined to add a second guard to its required
+  checks until this was closed.
+
 ## [1.7.2] - 2026-09-16
 
 **An action-only release. The tag moves; the npm packages do not.** Nothing

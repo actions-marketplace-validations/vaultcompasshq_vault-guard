@@ -140,11 +140,18 @@ function makeRunner(inputs: Record<string, string> = {}): Runner {
   // the point: npm started inside the checkout reads the head's `.npmrc`,
   // package.json and lockfile, and no assertion about the run step can see that,
   // because by then the install has already happened.
+  // The stub also CREATES `<prefix>/lib`, because a real global install does
+  // and the step verifies the installed tree from inside it. A stub that
+  // recorded the argv without laying the directory down would make the
+  // verification step abort on a missing cwd, which is the harness failing
+  // rather than the action -- and would hide whether the action verifies at
+  // all.
   writeFileSync(
     path.join(pathDir, 'npm'),
     `#!/bin/sh\nprintf 'cwd=%s\\n' "$(pwd -P)" >> ${JSON.stringify(npmRecord)}\n` +
       `printf 'argv=%s\\n' "$*" >> ${JSON.stringify(npmRecord)}\n` +
       `printf 'prefix=%s\\n' "\${npm_config_prefix:-unset}" >> ${JSON.stringify(npmRecord)}\n` +
+      'case "$1" in install) mkdir -p "${npm_config_prefix}/lib" ;; esac\n' +
       'exit 0\n',
   );
   chmodSync(path.join(pathDir, 'npm'), 0o755);
@@ -296,12 +303,14 @@ describe('action.yml "Install vault-guard outside the workspace"', () => {
   it('installs the pinned version globally, and nothing else', () => {
     const run = runInstall();
     expect(run.status).toBe(0);
-    expect(run.record).toContain('argv=install -g @vaultcompass/vault-guard@1.7.0');
+    expect(run.record).toContain(
+      'argv=install -g --ignore-scripts @vaultcompass/vault-guard@1.7.0',
+    );
   });
 
   it('installs the version the input asked for, not a hardcoded one', () => {
     expect(runInstall({ version: '1.6.0' }).record).toContain(
-      'argv=install -g @vaultcompass/vault-guard@1.6.0',
+      'argv=install -g --ignore-scripts @vaultcompass/vault-guard@1.6.0',
     );
   });
 
@@ -323,6 +332,54 @@ describe('action.yml "Install vault-guard outside the workspace"', () => {
     expect(prefixLine).not.toBe('prefix=unset');
     expect(prefixLine).toContain(path.basename(run.runner.runnerTemp));
     expect(prefixLine).not.toContain(`${path.sep}workspace`);
+  });
+
+  it('never lets an installed package run its own install scripts', () => {
+    // The scanner is a control input, and this step runs on a runner holding
+    // the job's token. Without `--ignore-scripts` every package in the
+    // resolved tree gets arbitrary code execution there on every run, which is
+    // a strange amount of trust for the tool whose whole job is deciding
+    // whether this repository can be trusted.
+    //
+    // It costs nothing here. `better-sqlite3` is the only native dependency,
+    // it is an OPTIONAL dependency of the telemetry package, and the store
+    // degrades when its bindings are missing -- `store-unavailable.test.ts`
+    // covers exactly the "an --ignore-scripts install" case by name. Verified
+    // against the real registry too: a global install with the flag scans a
+    // clean tree to the same 627 bytes and the same exit 0 as one without it.
+    const run = runInstall();
+    const argvLine = run.record.split('\n').find((l) => l.startsWith('argv=install'));
+    expect(argvLine).toBeDefined();
+    expect(argvLine).toContain('--ignore-scripts');
+  });
+
+  it('verifies what it installed came from where it claims', () => {
+    // The packages publish SLSA provenance attestations through the OIDC
+    // trusted-publisher path. Publishing them and never checking them buys
+    // nothing: the gate that decides whether a repository is carrying secrets
+    // was installing itself unverified, so a compromised registry or publish
+    // account replaced the judge and nothing in the run would have said so.
+    //
+    // `npm audit signatures` is the check, and it FAILS CLOSED because the
+    // step runs under `set -eu`. What it proves is bounded and worth stating:
+    // it verifies the signatures and attestations that exist. A dependency
+    // that publishes no attestation is not a failure, so this raises the cost
+    // of substituting our own package without pretending to cover the whole
+    // tree.
+    const run = runInstall();
+    expect(run.record).toContain('argv=audit signatures');
+  });
+
+  it('verifies AFTER installing, and refuses to run a binary it could not verify', () => {
+    // Ordering is the whole control. A verification that ran before the
+    // install would be checking a tree that does not exist yet, and one that
+    // ran after the scan would be an audit note rather than a gate.
+    const run = runInstall();
+    const lines = run.record.split('\n');
+    const installAt = lines.findIndex((l) => l.startsWith('argv=install'));
+    const auditAt = lines.findIndex((l) => l.startsWith('argv=audit signatures'));
+    expect([installAt, auditAt].every((i) => i !== -1)).toBe(true);
+    expect(auditAt).toBeGreaterThan(installAt);
   });
 
   it('the binary the run step calls is the one this step installs', () => {

@@ -385,8 +385,28 @@ describe('action.yml text guards', () => {
     // every behavioural test still passed.
     expect(action.hasStep(INSTALL_STEP)).toBe(true);
     const install = action.extractRunScript(INSTALL_STEP);
-    expect(install).toContain('npm install -g "@vaultcompass/vault-guard@${VG_VERSION}"');
+    expect(install).toContain(
+      'npm install -g --ignore-scripts "@vaultcompass/vault-guard@${VG_VERSION}"',
+    );
     expect(action.extractStepEnv(INSTALL_STEP).npm_config_prefix).toContain('${{ runner.temp }}');
+  });
+
+  it('never installs without --ignore-scripts, and verifies before handing over', () => {
+    // Stated as text for the same reason as the guard above: the behavioural
+    // tests run against a STUBBED npm, so they can prove the action ASKS for
+    // both, and nothing about what a real npm does when asked. These two lines
+    // are the ask.
+    const install = action.extractRunScript(INSTALL_STEP);
+    const installAt = install.indexOf('npm install -g');
+    const auditAt = install.indexOf('npm audit signatures');
+    expect([installAt, auditAt].every((i) => i !== -1)).toBe(true);
+    expect(auditAt).toBeGreaterThan(installAt);
+    // No install anywhere in the step that skips the flag.
+    for (const line of install.split('\n')) {
+      if (line.trim().startsWith('npm install')) {
+        expect([line, line.includes('--ignore-scripts')]).toEqual([line, true]);
+      }
+    }
   });
 
   it('never runs npx, and never resolves the scanner by bare name', () => {
