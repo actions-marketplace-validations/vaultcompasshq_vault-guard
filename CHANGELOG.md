@@ -7,8 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-**An action-only change. The tag will move; the npm packages do not.** Nothing
-in the scanner changed, so the `version` default stays `1.7.0`.
+## [1.7.2] - 2026-09-16
+
+**An action-only release. The tag moves; the npm packages do not.** Nothing
+in the scanner changed, so `@vaultcompass/vault-guard` and the other three
+packages stay at 1.7.0 on npm, and the Action's `version` default stays
+`1.7.0`. `vaultcompasshq/vault-guard@v1.7.2` installs
+`@vaultcompass/vault-guard@1.7.0`.
 
 ### Fixed
 
