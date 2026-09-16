@@ -157,6 +157,50 @@ describe('action.yml "Validate inputs", version', () => {
     ).version;
     expect((defaultAt as RegExpExecArray)[1]).toBe(cliVersion);
   });
+
+  it('refuses a scanner too old for the flags this action tag passes', () => {
+    // The `version` input exists so a consumer can pin a scanner OTHER than the
+    // one this tag shipped with, which makes version skew a supported
+    // configuration. The run step passes `--trust-base` unconditionally, and
+    // that flag arrived in scanner 1.7.0, so every older pin produces an
+    // unsupported argument vector. Commander answers an unknown option with
+    // exit 1, the findings code, so the shape validation passing here is what
+    // turns a stale pin into an accusation of carrying secrets.
+    //
+    // The message has to carry BOTH numbers. "Unsupported version" without them
+    // sends the reader to the changelog to work out which two values disagree.
+    const run = runValidateWith({ version: '1.4.1' });
+    expect(run.status).not.toBe(0);
+    expect(run.stdout).toContain('1.4.1');
+    expect(run.stdout).toContain('1.7.0');
+    expect(run.stdout).toContain('--trust-base');
+  });
+
+  it('compares the floor numerically, not as text', () => {
+    // `1.10.0` sorts BELOW `1.7.0` as a string and above it as a version, so a
+    // lexicographic comparison here would refuse a scanner newer than the one
+    // the floor is protecting. The low side is the same check from the other
+    // direction: 1.6.9 is one patch under the floor and must still be refused.
+    for (const tooOld of ['0.9.9', '1.6.0', '1.6.9', '1.4.1']) {
+      expect([tooOld, runValidateWith({ version: tooOld }).status]).not.toEqual([tooOld, 0]);
+    }
+    for (const ok of ['1.7.0', '1.7.1', '1.8.0', '1.10.0', '2.0.0', '10.0.0']) {
+      expect([ok, runValidateWith({ version: ok }).status]).toEqual([ok, 0]);
+    }
+  });
+
+  it('never defaults to a scanner version it would then refuse', () => {
+    // Two numbers in one file that have to move together: raising the floor
+    // without raising the default would make the action refuse its own default
+    // and fail every run that did not set the input.
+    const defaultAt = /default:\s*(\S+)\s*\n\s*path:/.exec(actionYml);
+    expect(defaultAt).not.toBeNull();
+    const defaultVersion = (defaultAt as RegExpExecArray)[1];
+    expect([defaultVersion, runValidateWith({ version: defaultVersion }).status]).toEqual([
+      defaultVersion,
+      0,
+    ]);
+  });
 });
 
 describe('action.yml "Validate inputs", paths', () => {

@@ -178,6 +178,65 @@ runs:
           exit 1
         fi
 
+        # SHAPE IS NOT CAPABILITY. The check above proves the input names a
+        # version; it says nothing about whether that version understands the
+        # arguments this tag is going to hand it.
+        #
+        # The whole reason the `version` input exists is to let a consumer pin a
+        # scanner OTHER than the one this tag shipped with, so version skew is a
+        # SUPPORTED configuration rather than a misuse. The run step passes
+        # `--trust-base` on every pull-request run, and that flag arrived in
+        # scanner 1.7.0. Handed to anything older, Commander answers `error:
+        # unknown option '--trust-base'` and exits 1 -- the same code the scanner
+        # uses for findings -- so a stale pin was reported to the repository as
+        # secrets nobody found, from a scan that never started.
+        #
+        # This floor is therefore a property of THE FLAGS THIS TAG PASSES, not of
+        # the tag number: raise it in the same commit that starts passing a newer
+        # flag, and name that flag in the message so the reader is not sent to
+        # the changelog to work out which two numbers disagree.
+        VG_MIN_MAJOR=1
+        VG_MIN_MINOR=7
+        VG_MIN_PATCH=0
+        VG_MIN_SCANNER="${VG_MIN_MAJOR}.${VG_MIN_MINOR}.${VG_MIN_PATCH}"
+
+        # Matched again rather than read out of `BASH_REMATCH` from the check
+        # above. That array does survive the `!` there, but a reader repairing
+        # the shape check has no way to know this block is downstream of it, and
+        # a silently emptied capture would compare against zeroes and let
+        # everything through. The pattern is the same one deliberately, so the
+        # two cannot drift into disagreeing about what a version is.
+        if [[ ! "${VG_VERSION}" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+          printf '::error::vault-guard: internal: %q passed the version shape check and then did not parse. Refusing rather than guessing.\n' "${VG_VERSION}"
+          exit 1
+        fi
+        VG_MAJOR="${BASH_REMATCH[1]}"
+        VG_MINOR="${BASH_REMATCH[2]}"
+        VG_PATCH="${BASH_REMATCH[3]}"
+
+        # Compared component by component, never as text: `1.10.0` sorts BELOW
+        # `1.7.0` as a string and above it as a version, so a lexicographic
+        # comparison here would refuse the newer scanner the floor exists to
+        # keep. Arithmetic contexts read a leading zero as octal, which cannot
+        # arrive because the pattern above refuses leading zeros.
+        VG_TOO_OLD=0
+        if (( VG_MAJOR < VG_MIN_MAJOR )); then
+          VG_TOO_OLD=1
+        elif (( VG_MAJOR == VG_MIN_MAJOR )); then
+          if (( VG_MINOR < VG_MIN_MINOR )); then
+            VG_TOO_OLD=1
+          elif (( VG_MINOR == VG_MIN_MINOR )) && (( VG_PATCH < VG_MIN_PATCH )); then
+            VG_TOO_OLD=1
+          fi
+        fi
+
+        if (( VG_TOO_OLD == 1 )); then
+          printf '::error::vault-guard: this action tag needs scanner %s or newer, and the `version` input asks for %s.\n' "${VG_MIN_SCANNER}" "${VG_VERSION}"
+          printf '::error::The scan passes --trust-base, which scanner %s added. An older scanner refuses that as an unknown option and exits 1, which is also its findings code, so the run would be reported as secrets found by a scan that never ran.\n' "${VG_MIN_SCANNER}"
+          printf '::error::REMOVE the `version` input to take the scanner this action tag shipped with, which is the pin you want, or raise it to %s or newer. A `version` input that Dependabot does not move is a second pin in a place no automation looks.\n' "${VG_MIN_SCANNER}"
+          exit 1
+        fi
+
         # `off` was accepted before 1.7.0 shipped and is refused by name, so a
         # workflow carrying it gets told what happened rather than a confusing
         # "ref does not resolve" from a scan that tried to use `off` as a branch
@@ -554,12 +613,33 @@ runs:
         # is zero bytes. Handing that path to upload-sarif fails the job with a
         # SARIF parse error, which buries the real cause under a complaint
         # about the upload.
+        REPORTED=0
         if [[ -s "${OUT}" ]]; then
           RESULTS_FILE="${OUT}"
+          REPORTED=1
         else
           printf 'vault-guard: nothing was written to %s (the scan exited %s first), so there is nothing to upload.\n' "${OUT}" "${SCAN_STATUS}"
         fi
 
+        # A VERDICT REQUIRES A REPORT, AND THE EXIT CODE ALONE IS NOT ONE.
+        #
+        # The status says what the scanner decided; whether anything was written
+        # says whether it got far enough to decide. Both arms of reading the
+        # status by itself are wrong when the report is empty, and they are wrong
+        # in opposite directions:
+        #
+        #   exit 1, no report. Commander exits 1 on an unknown option and writes
+        #   the message to STDERR, so the teed report stays empty. 1 is also the
+        #   findings code, so the action accused a repository of carrying secrets
+        #   because the scanner could not parse its own argv. Version skew is the
+        #   realistic way in -- see the scanner floor in "Validate inputs" -- and
+        #   findings would have produced findings, so this cannot be them.
+        #
+        #   exit 0, no report. The same inference on the arm that fails OPEN: a
+        #   clean scan prints its report, so an exit 0 with nothing written is
+        #   not a clean tree, it is a scan that did not happen, and calling it
+        #   clean passes a pull request that nothing looked at.
+        #
         # Only 0, 1 and 2 are vault-guard's. Everything else, including the 126
         # and 127 the SHELL produces when the binary is missing or not
         # executable, is could-not-run and is re-raised as 2, so a required
@@ -572,17 +652,26 @@ runs:
         # shell status here and mapping only the step's own exit would hand that
         # caller a 127 the contract says cannot happen, which is the same bug
         # class as reporting a failed install as findings, one layer out.
-        case "${SCAN_STATUS}" in
-          0|1|2)
-            EXIT_CODE="${SCAN_STATUS}"
-            ;;
-          *)
-            EXIT_CODE=2
-            ;;
-        esac
+        if [[ "${REPORTED}" -eq 0 ]]; then
+          EXIT_CODE=2
+        else
+          case "${SCAN_STATUS}" in
+            0|1|2)
+              EXIT_CODE="${SCAN_STATUS}"
+              ;;
+            *)
+              EXIT_CODE=2
+              ;;
+          esac
+        fi
 
         echo "results_file=${RESULTS_FILE}" >> "${GITHUB_OUTPUT}"
         echo "exit_code=${EXIT_CODE}" >> "${GITHUB_OUTPUT}"
+
+        if [[ "${REPORTED}" -eq 0 ]]; then
+          printf '::error::vault-guard did not produce a result: the scan exited %s and wrote no report, so there is nothing a verdict could be read from. This is not findings and it is not a clean scan. The usual causes are a scanner that refused an argument this action tag passed (check the `version` input against the tag) and a binary that failed to run at all. Reported as could not run.\n' "${SCAN_STATUS}"
+          exit 2
+        fi
 
         case "${SCAN_STATUS}" in
           0)

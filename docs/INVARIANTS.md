@@ -142,6 +142,37 @@ empty file with a parse error that buries the real message.
 **Enforced by:** the exit-code cases in `action-run-script.test.ts`, including
 one that never installs the binary at all and asserts the output reads 2.
 
+## A verdict requires a report, and the exit code alone is not one
+
+The status says what the scanner decided. Whether it wrote anything says whether
+it got far enough to decide. When the report is empty the status must not be
+read as a verdict at all, and both arms of reading it anyway are wrong, in
+opposite directions.
+
+Exit 1 with no report is not findings. Commander exits 1 on an unknown option
+and writes the message to STDERR, so the teed report stays empty, and 1 is also
+the findings code. That is a live failure rather than a theoretical one: a
+consumer pinning a `version` older than the flags this tag passes had a
+repository told it was carrying secrets by a scanner that never parsed its own
+argv. Findings would have produced findings.
+
+Exit 0 with no report is not a clean scan. Same inference on the arm that fails
+OPEN: a clean scan prints its report, so nothing written means the scan did not
+happen, and calling that clean passes a pull request nothing looked at.
+
+Both are re-raised as 2 with a message that says no report was written and names
+the version skew as the usual cause. This is deliberately keyed on the REPORT
+and not on a list of known-bad exit codes: the failure that produced this rule
+landed on 1, the most ordinary code there is, which is why the wildcard arm that
+had exactly the right words for it never fired.
+
+**Enforced by:** `action-run-script.test.ts`, which drives a stub that writes to
+stderr only and exits 0 and 1 in turn, alongside a case asserting a report WITH
+findings in it is still reported as findings. Verified against the real binary:
+a clean scan writes 627 bytes and exits 0, the `fixtures/release-smoke` leak
+writes 1830 bytes and exits 1, and `--trust-base` against a scanner that lacks
+it writes zero bytes to stdout and exits 1.
+
 ## The `version` input takes an exact version only
 
 It defaults to the SCANNER version the Action tag shipped with, which is a
@@ -158,6 +189,28 @@ alternative in it is a wall.
 
 **Enforced by:** the version cases in both action test files and in
 `scripts/test-action-path-validation.sh`.
+
+## The `version` input is checked for CAPABILITY, not only for shape
+
+Passing the semver pattern proves the input names a version. It says nothing
+about whether that version understands the arguments this tag is about to hand
+it, and the input exists precisely so a consumer can pin a scanner OTHER than
+the one the tag shipped with. Version skew is therefore a supported
+configuration that can produce an unsupported argument vector.
+
+The step declares the oldest scanner this tag can drive and refuses anything
+below it, naming both numbers and the flag that set the floor. The floor is a
+property of THE FLAGS THIS TAG PASSES rather than of the tag number: raise it in
+the same commit that starts passing a newer flag. Today it is 1.7.0, set by
+`--trust-base`.
+
+The comparison is component by component and never textual, because `1.10.0`
+sorts below `1.7.0` as a string and above it as a version, so a lexicographic
+check would refuse the newer scanner the floor exists to keep.
+
+**Enforced by:** the floor cases in `action-path-validation.test.ts`, which
+include `1.10.0` on the accepted side and `1.6.9` on the refused side, plus a
+case asserting the action never defaults to a version it would itself refuse.
 
 ## The Action tag and the scanner version are two numbers, and both get bumped
 

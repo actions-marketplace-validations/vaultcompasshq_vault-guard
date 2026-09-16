@@ -54,7 +54,7 @@ judge.
 
 | Input           | Default                     | Description |
 |----------------|-----------------------------|-------------|
-| `version`      | `1.7.0`                     | **Exact** version of `@vaultcompass/vault-guard`, validated against `^(0\|[1-9][0-9]*)\.(0\|[1-9][0-9]*)\.(0\|[1-9][0-9]*)$`. A dist-tag (`latest`, `next`, `beta`), a range, a prerelease, or a leading zero is refused. The default is the scanner this Action tag shipped with; leaving the input out is the recommended shape. |
+| `version`      | `1.7.0`                     | **Exact** version of `@vaultcompass/vault-guard`, validated against `^(0\|[1-9][0-9]*)\.(0\|[1-9][0-9]*)\.(0\|[1-9][0-9]*)$`. A dist-tag (`latest`, `next`, `beta`), a range, a prerelease, or a leading zero is refused, and so is anything below **1.7.0**, the oldest scanner this Action tag can drive. The default is the scanner this Action tag shipped with; leaving the input out is the recommended shape. |
 | `path`         | `.`                         | Subdirectory to scan, relative to workspace root. Must not begin with `-`, contain `..`, or resolve outside the workspace through a symlink. |
 | `format`       | `sarif`                     | `sarif`, `json`, or `text`. |
 | `sarif-output` | `vault-guard-results.sarif` | Output file path **under** `GITHUB_WORKSPACE`. May not resolve under `.github/`, and may not resolve through a symlink at the file or at any directory on the way to it. |
@@ -70,6 +70,25 @@ ends in `.tgz`, so the old charset accepted `.`, `..` and `payload.tgz` — whic
 on a step that ran from inside the checkout, was one committed file away from
 the tree handing over its own scanner. **Remove the input** rather than pinning
 it: the default is already the right pin.
+
+### A `version` below 1.7.0 is refused too
+
+Shape is not capability. Passing the semver pattern proves the input names a
+version; it says nothing about whether that version understands the arguments
+this Action tag hands it. The scan passes `--trust-base`, which the scanner
+added in 1.7.0, and an older scanner answers an unknown option with exit 1, the
+same code it uses for findings.
+
+So the Action declares the oldest scanner it can drive and refuses anything
+below it at input validation, naming both numbers. The floor tracks THE FLAGS
+THE TAG PASSES, not the tag number, and it moves in whichever release starts
+passing a newer flag.
+
+This is the shape that produced the bug: a repository whose workflow pinned
+`version: 1.4.1` while Dependabot moved only the Action SHA got told it was
+carrying secrets, from a scan that stopped at argument parsing. **Remove the
+input.** A `version:` Dependabot does not move is a second pin in a place no
+automation looks.
 
 ## Pull requests
 
