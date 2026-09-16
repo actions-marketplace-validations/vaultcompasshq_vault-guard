@@ -84,6 +84,30 @@ jobs:
     - name: Build packages
       run: pnpm build
 
+    # WHAT THIS JOB IS FOR: the SCANNER on Windows. `scan`, `check` and the MCP
+    # server are supported there, and this job is what keeps them working.
+    #
+    # `test:windows` also excludes the action suites under `__tests__/action`,
+    # and that exclusion is a statement about scope rather than a failure being
+    # swept up. Those suites execute action.yml's own `run:` blocks under
+    # `bash --noprofile --norc -eo pipefail` against `#!/bin/sh` stub binaries
+    # the harness writes. None of that is a thing Windows runs, so on this
+    # runner every one of them failed at the same place: the stub never
+    # executed, the file it was supposed to write back stayed empty, and the
+    # assertion read `Received string: ""`. That is the harness being
+    # unrunnable here, not the action being broken, and it says nothing about
+    # whether the scanner works on Windows.
+    #
+    # There is also no Windows behaviour for them to cover: the composite
+    # action is Linux and macOS only by design. See the comment at the install
+    # step in action.yml -- a global npm install puts its shims in
+    # `<prefix>/bin` on those platforms and in the prefix directory itself on
+    # Windows, which would put an empty directory on PATH.
+    #
+    # THIS JOB WAS RED ON MAIN from 2026-09-13 to 2026-09-16, across the whole
+    # v1.7.1 release, and nobody was told, because it is not a required check.
+    # Worth remembering before adding another job nobody watches: a check that
+    # fails where no one is looking is not a check.
     - name: Run unit tests (core + CLI; no hook/proxy integration)
       run: pnpm test:windows
 
