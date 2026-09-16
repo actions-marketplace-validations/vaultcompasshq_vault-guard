@@ -168,10 +168,17 @@ had exactly the right words for it never fired.
 
 **Enforced by:** `action-run-script.test.ts`, which drives a stub that writes to
 stderr only and exits 0 and 1 in turn, alongside a case asserting a report WITH
-findings in it is still reported as findings. Verified against the real binary:
-a clean scan writes 627 bytes and exits 0, the `fixtures/release-smoke` leak
-writes 1830 bytes and exits 1, and `--trust-base` against a scanner that lacks
-it writes zero bytes to stdout and exits 1.
+findings in it is still reported as findings.
+
+Verified against the real binary at scanner 1.7.0: a clean scan writes 627 bytes
+and exits 0, the `fixtures/release-smoke` leak writes 1830 bytes and exits 1,
+and an UNKNOWN OPTION writes zero bytes to stdout, its message to stderr, and
+exits 1. That last one is a stand-in for the reported failure rather than a
+reproduction of it: it runs a made-up flag against a current scanner, not
+`--trust-base` against an old one, which is a different way into the same
+Commander code path at `lib/command.js:2010`, where `error()` computes
+`config.exitCode || 1`. Nobody has run an old scanner here, and this entry
+should not be read as saying otherwise.
 
 ## The `version` input takes an exact version only
 
@@ -187,8 +194,11 @@ treated as a dist-tag. The refusal message names the migration (`REMOVE the
 input`), because `latest` used to be the default and a refusal with no
 alternative in it is a wall.
 
-**Enforced by:** the version cases in both action test files and in
-`scripts/test-action-path-validation.sh`.
+**Enforced by:** the version cases in both action test files, and the SHAPE half
+of the contract in `scripts/test-action-path-validation.sh`. That script checks
+a hand-copied regex rather than the step itself, so it can run on the macOS
+runner's bash 3.2. The copy has already cost once: it kept asserting `0.0.0` was
+accepted, and stayed green, after the action started refusing it.
 
 ## The `version` input is checked for CAPABILITY, not only for shape
 

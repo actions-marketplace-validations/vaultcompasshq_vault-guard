@@ -639,6 +639,20 @@ describe('action.yml "Run vault-guard", under GitHub bash flags', () => {
     expect(run.stdout).toContain('did not produce a result');
   });
 
+  it('names the trust base when the scanner itself says it could not run', () => {
+    // The scanner's reachable exit-2 paths write to stderr and no report, so
+    // they land in the no-report branch too. Left there, the generic message
+    // would tell someone whose actual problem is a missing `fetch-depth: 0` --
+    // the one failure the Action docs single out -- to go and check their
+    // `version` input instead. A status of 2 is the scanner reporting
+    // could-not-run itself and needs no inference from what it wrote.
+    const run = runStepWritingNothing(2);
+    expect(run.status).toBe(2);
+    expect(run.outputs).toContain('exit_code=2');
+    expect(run.stdout).toContain('unresolvable trust base');
+    expect(run.stdout).not.toContain('check the `version` input');
+  });
+
   it('still calls a report with findings in it findings', () => {
     // The guard above keys on the REPORT rather than on the exit code, so this
     // is the assertion that keeps it from swallowing the case the gate exists

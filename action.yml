@@ -232,7 +232,7 @@ runs:
 
         if (( VG_TOO_OLD == 1 )); then
           printf '::error::vault-guard: this action tag needs scanner %s or newer, and the `version` input asks for %s.\n' "${VG_MIN_SCANNER}" "${VG_VERSION}"
-          printf '::error::The scan passes --trust-base, which scanner %s added. An older scanner refuses that as an unknown option and exits 1, which is also its findings code, so the run would be reported as secrets found by a scan that never ran.\n' "${VG_MIN_SCANNER}"
+          printf '::error::The scan passes --trust-base on pull-request runs, and on every run when `trust-base` names an explicit ref. That flag arrived in scanner %s. An older scanner refuses it as an unknown option and exits 1, which is also its findings code, so the run would be reported as secrets found by a scan that never ran.\n' "${VG_MIN_SCANNER}"
           printf '::error::REMOVE the `version` input to take the scanner this action tag shipped with, which is the pin you want, or raise it to %s or newer. A `version` input that Dependabot does not move is a second pin in a place no automation looks.\n' "${VG_MIN_SCANNER}"
           exit 1
         fi
@@ -668,7 +668,16 @@ runs:
         echo "results_file=${RESULTS_FILE}" >> "${GITHUB_OUTPUT}"
         echo "exit_code=${EXIT_CODE}" >> "${GITHUB_OUTPUT}"
 
-        if [[ "${REPORTED}" -eq 0 ]]; then
+        # Exit 2 is excluded here, and that exclusion is the whole point of the
+        # condition. The scanner's reachable exit-2 paths -- an unresolvable
+        # trust base, a scan target outside the base repo -- write to stderr and
+        # no report, so they land in this branch too, and the generic message
+        # below would tell someone whose real problem is a missing
+        # `fetch-depth: 0` to go and check their `version` input. The scanner
+        # already said what happened; the arm at the bottom of the case names
+        # the trust base. A status of 2 is the scanner reporting could-not-run
+        # itself, which needs no inference from whether it wrote anything.
+        if [[ "${REPORTED}" -eq 0 ]] && [[ "${SCAN_STATUS}" -ne 2 ]]; then
           printf '::error::vault-guard did not produce a result: the scan exited %s and wrote no report, so there is nothing a verdict could be read from. This is not findings and it is not a clean scan. The usual causes are a scanner that refused an argument this action tag passed (check the `version` input against the tag) and a binary that failed to run at all. Reported as could not run.\n' "${SCAN_STATUS}"
           exit 2
         fi

@@ -175,7 +175,18 @@ jobs:
 | Output          | Description |
 |----------------|-------------|
 | `results-file` | Absolute path to the written SARIF/JSON file, or **empty** when the run wrote nothing at all. |
-| `exit-code`    | vault-guard's own exit code: 0 clean, 1 secrets at or above the gate, 2 could not run. |
+| `exit-code`    | The verdict: 0 clean, 1 secrets at or above the gate, 2 could not run. Usually vault-guard's own exit code, but see the remap below: a scan that wrote no report is **2** whatever it exited. |
+
+**A verdict requires a report.** The exit code says what the scanner decided;
+whether it wrote anything says whether it got far enough to decide. When the
+report is empty the status is not read as a verdict at all, and the run is
+reported as could-not-run (**2**). That covers exits of 0 and 1 too, not only
+unexpected codes. Exit 1 with no report is not findings, because findings would
+have produced findings, and the realistic cause is a scanner that refused an
+argument (see the version floor above). Exit 1 is also what the CLI's argument
+parser returns for an unknown option, writing to stderr, which leaves nothing in
+the report. Exit 0 with no report is not a clean scan either: a clean scan
+prints its report, so nothing written means the scan did not happen.
 
 Only 0, 1 and 2 are verdicts. Anything else the step sees — including the 126
 and 127 the shell produces when a binary is missing or not executable — is
