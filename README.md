@@ -115,7 +115,12 @@ vault-guard install-hook --manager lefthook   # lefthook-local.yml
 vault-guard install-hook --manager precommit  # .pre-commit-config.yaml (only if absent)
 ```
 
-**Windows:** `scan`, `check`, MCP, and CI workflows are supported on Windows.
+**Windows:** `scan`, `check`, MCP, and CI workflows are supported on Windows,
+by calling the CLI. **The composite Action is Linux and macOS only**: it
+installs the scanner globally and adds `<prefix>/bin` to `PATH`, which is where
+npm puts the shims on those platforms and not where it puts them on Windows. On
+a `windows-latest` runner, run the CLI directly rather than
+`uses: vaultcompasshq/vault-guard@…`.
 Native hook install writes a POSIX `pre-commit` script (Git for Windows runs it
 via `sh`, same as Git Bash) plus an optional `pre-commit.cmd` for clients that
 call `.cmd` hooks directly. `git.exe` does not use the `.cmd` file.
