@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+**An action-only change. The tag will move; the npm packages do not.** Nothing
+in the scanner changed, so the `version` default stays `1.7.0`.
+
+### Fixed
+
+- **A scan that never ran is no longer reported as findings.** The run step
+  mapped exit 1 straight to "vault-guard found secrets at or above the gate".
+  Commander, the CLI's argument parser, also exits 1 on an unknown option and
+  writes the message to stderr, so a repository whose scan failed at argument
+  parsing was told it was carrying secrets by a scanner that never scanned
+  anything. Found from a real gate run: an action pinned at v1.7.1 driving a
+  scanner pinned at 1.4.1, which predates `--trust-base`.
+
+  The step now requires a REPORT before it reads the exit code as a verdict.
+  Exit 1 with nothing written is could-not-run (exit 2), because findings would
+  have produced findings. The same guard closes the arm that failed OPEN: exit 0
+  with nothing written was reported as a clean scan, and it is a scan that did
+  not happen. A report with findings in it is still reported as findings.
+
+  This failed closed and was never a way past the gate. What it cost was trust
+  in the gate's own message, which is the faster way to teach a team to wave a
+  required check through.
+
+- **The `version` input is now checked against the flags this tag passes.** It
+  was validated for semver shape only, and the run step then passed
+  `--trust-base` regardless of which scanner it had just installed. Since the
+  input exists so a consumer can pin a scanner other than the one the tag
+  shipped with, version skew is a supported configuration that produced an
+  unsupported argument vector. The action declares the oldest scanner it can
+  drive, currently 1.7.0 because of `--trust-base`, and refuses anything below
+  it with a message naming both numbers and the flag.
+
+  A workflow pinning `version:` below 1.7.0 now fails at input validation with
+  an explanation instead of failing at the scan with an accusation. The fix in
+  nearly every case is to DELETE the input: the default is the scanner the tag
+  shipped with, and a `version:` that Dependabot does not move is a second pin
+  in a place no automation looks.
+
 ## [1.7.1] - 2026-09-13
 
 **An action-only release. The tag moves; the npm packages do not.** Nothing in

@@ -599,4 +599,67 @@ describe('action.yml "Run vault-guard", under GitHub bash flags', () => {
     const run = runStep(1);
     expect(() => JSON.parse(readFileSync(run.sarifPath, 'utf-8'))).not.toThrow();
   });
+
+  // A stub that exits with `code` having written nothing to stdout. Commander
+  // writes its argument errors to STDERR, which is why the report the step tees
+  // is empty in exactly this case, and why a stub that echoed something to
+  // stdout would be testing a different program.
+  function runStepWritingNothing(code: number): RunResult {
+    const runner = makeRunner();
+    installStubScanner(runner);
+    writeFileSync(runner.env.VG_BIN, `#!/bin/sh\necho 'boom' >&2\nexit ${code}\n`);
+    chmodSync(runner.env.VG_BIN, 0o755);
+    return runStepFor(runner);
+  }
+
+  it('reports a CLI argument failure as could not run, never as findings', () => {
+    // Commander exits 1 on an unknown option, and 1 is also the findings code.
+    // An action that reads the number alone tells a repository it is carrying
+    // secrets when the scanner never got past parsing its own argv. The
+    // realistic way in is version skew: a `version` input older than the flags
+    // this tag passes, which is how this was found.
+    //
+    // The disproof is already in hand by this point in the step -- findings
+    // would have produced a report, and there is no report.
+    const run = runStepWritingNothing(1);
+    expect(run.status).toBe(2);
+    expect(run.outputs).toContain('exit_code=2');
+    expect(run.stdout).toContain('did not produce a result');
+    expect(run.stdout).not.toContain('found secrets');
+  });
+
+  it('never reports a clean result from a scan that wrote nothing', () => {
+    // The same inference as the case above, on the arm where getting it wrong
+    // fails OPEN: an exit 0 with no report is not a clean scan, it is a scan
+    // that did not happen, and calling it clean passes a pull request that
+    // nothing looked at.
+    const run = runStepWritingNothing(0);
+    expect(run.status).toBe(2);
+    expect(run.outputs).toContain('exit_code=2');
+    expect(run.stdout).toContain('did not produce a result');
+  });
+
+  it('names the trust base when the scanner itself says it could not run', () => {
+    // The scanner's reachable exit-2 paths write to stderr and no report, so
+    // they land in the no-report branch too. Left there, the generic message
+    // would tell someone whose actual problem is a missing `fetch-depth: 0` --
+    // the one failure the Action docs single out -- to go and check their
+    // `version` input instead. A status of 2 is the scanner reporting
+    // could-not-run itself and needs no inference from what it wrote.
+    const run = runStepWritingNothing(2);
+    expect(run.status).toBe(2);
+    expect(run.outputs).toContain('exit_code=2');
+    expect(run.stdout).toContain('unresolvable trust base');
+    expect(run.stdout).not.toContain('check the `version` input');
+  });
+
+  it('still calls a report with findings in it findings', () => {
+    // The guard above keys on the REPORT rather than on the exit code, so this
+    // is the assertion that keeps it from swallowing the case the gate exists
+    // for.
+    const run = runStep(1);
+    expect(run.status).toBe(1);
+    expect(run.outputs).toContain('exit_code=1');
+    expect(run.stdout).toContain('found secrets');
+  });
 });

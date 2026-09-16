@@ -54,7 +54,7 @@ judge.
 
 | Input           | Default                     | Description |
 |----------------|-----------------------------|-------------|
-| `version`      | `1.7.0`                     | **Exact** version of `@vaultcompass/vault-guard`, validated against `^(0\|[1-9][0-9]*)\.(0\|[1-9][0-9]*)\.(0\|[1-9][0-9]*)$`. A dist-tag (`latest`, `next`, `beta`), a range, a prerelease, or a leading zero is refused. The default is the scanner this Action tag shipped with; leaving the input out is the recommended shape. |
+| `version`      | `1.7.0`                     | **Exact** version of `@vaultcompass/vault-guard`, validated against `^(0\|[1-9][0-9]*)\.(0\|[1-9][0-9]*)\.(0\|[1-9][0-9]*)$`. A dist-tag (`latest`, `next`, `beta`), a range, a prerelease, or a leading zero is refused, and so is anything below **1.7.0**, the oldest scanner this Action tag can drive. The default is the scanner this Action tag shipped with; leaving the input out is the recommended shape. |
 | `path`         | `.`                         | Subdirectory to scan, relative to workspace root. Must not begin with `-`, contain `..`, or resolve outside the workspace through a symlink. |
 | `format`       | `sarif`                     | `sarif`, `json`, or `text`. |
 | `sarif-output` | `vault-guard-results.sarif` | Output file path **under** `GITHUB_WORKSPACE`. May not resolve under `.github/`, and may not resolve through a symlink at the file or at any directory on the way to it. |
@@ -70,6 +70,25 @@ ends in `.tgz`, so the old charset accepted `.`, `..` and `payload.tgz` — whic
 on a step that ran from inside the checkout, was one committed file away from
 the tree handing over its own scanner. **Remove the input** rather than pinning
 it: the default is already the right pin.
+
+### A `version` below 1.7.0 is refused too
+
+Shape is not capability. Passing the semver pattern proves the input names a
+version; it says nothing about whether that version understands the arguments
+this Action tag hands it. The scan passes `--trust-base`, which the scanner
+added in 1.7.0, and an older scanner answers an unknown option with exit 1, the
+same code it uses for findings.
+
+So the Action declares the oldest scanner it can drive and refuses anything
+below it at input validation, naming both numbers. The floor tracks THE FLAGS
+THE TAG PASSES, not the tag number, and it moves in whichever release starts
+passing a newer flag.
+
+This is the shape that produced the bug: a repository whose workflow pinned
+`version: 1.4.1` while Dependabot moved only the Action SHA got told it was
+carrying secrets, from a scan that stopped at argument parsing. **Remove the
+input.** A `version:` Dependabot does not move is a second pin in a place no
+automation looks.
 
 ## Pull requests
 
@@ -156,7 +175,18 @@ jobs:
 | Output          | Description |
 |----------------|-------------|
 | `results-file` | Absolute path to the written SARIF/JSON file, or **empty** when the run wrote nothing at all. |
-| `exit-code`    | vault-guard's own exit code: 0 clean, 1 secrets at or above the gate, 2 could not run. |
+| `exit-code`    | The verdict: 0 clean, 1 secrets at or above the gate, 2 could not run. Usually vault-guard's own exit code, but see the remap below: a scan that wrote no report is **2** whatever it exited. |
+
+**A verdict requires a report.** The exit code says what the scanner decided;
+whether it wrote anything says whether it got far enough to decide. When the
+report is empty the status is not read as a verdict at all, and the run is
+reported as could-not-run (**2**). That covers exits of 0 and 1 too, not only
+unexpected codes. Exit 1 with no report is not findings, because findings would
+have produced findings, and the realistic cause is a scanner that refused an
+argument (see the version floor above). Exit 1 is also what the CLI's argument
+parser returns for an unknown option, writing to stderr, which leaves nothing in
+the report. Exit 0 with no report is not a clean scan either: a clean scan
+prints its report, so nothing written means the scan did not happen.
 
 Only 0, 1 and 2 are verdicts. Anything else the step sees — including the 126
 and 127 the shell produces when a binary is missing or not executable — is

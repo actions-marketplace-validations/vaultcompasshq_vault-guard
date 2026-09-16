@@ -108,10 +108,38 @@ fi
 # (`.`, `..`, anything ending in `.tgz`) was, on a step that ran from inside the
 # checkout, one committed file away from the tree choosing its own scanner.
 
+# The floor below is the second half of the contract: shape is not capability.
+# The action passes `--trust-base` on pull-request runs, that flag arrived in
+# scanner 1.7.0, and an older scanner answers an unknown option with exit 1,
+# which is also its findings code. Kept in step with the `VG_MIN_*` values in
+# action.yml.
+#
+# This IS a hand-copied check rather than the real step, deliberately, so it can
+# run on the macOS runner's bash 3.2 where the jest harness does not reach. That
+# copy is also the hazard: it sat green while asserting the OPPOSITE of the
+# shipped action for `0.0.0` until the floor was mirrored here.
+MIN_MAJOR=1
+MIN_MINOR=7
+MIN_PATCH=0
+
 validate_version() {
   local value="$1"
   if [[ ! "${value}" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
     return 1
+  fi
+  local major="${BASH_REMATCH[1]}"
+  local minor="${BASH_REMATCH[2]}"
+  local patch="${BASH_REMATCH[3]}"
+  # Component by component, never textual: `1.10.0` sorts below `1.7.0` as a
+  # string and above it as a version.
+  if (( major < MIN_MAJOR )); then
+    return 1
+  elif (( major == MIN_MAJOR )); then
+    if (( minor < MIN_MINOR )); then
+      return 1
+    elif (( minor == MIN_MINOR )) && (( patch < MIN_PATCH )); then
+      return 1
+    fi
   fi
   return 0
 }
@@ -132,7 +160,19 @@ assert_version_bad() {
 
 assert_version_ok "1.7.0"
 assert_version_ok "10.20.30"
-assert_version_ok "0.0.0"
+# `1.10.0` is the one a textual comparison gets wrong, and this is the only
+# place the floor is exercised on bash 3.2.
+assert_version_ok "1.10.0"
+assert_version_ok "1.7.1"
+assert_version_ok "2.0.0"
+
+# Below the floor. `0.0.0` USED to be asserted OK here, and stayed green after
+# the action started refusing it, because this check is a copy rather than the
+# step itself.
+assert_version_bad "0.0.0"
+assert_version_bad "1.6.9"
+assert_version_bad "1.6.0"
+assert_version_bad "0.9.9"
 
 assert_version_bad ""
 assert_version_bad "latest"
