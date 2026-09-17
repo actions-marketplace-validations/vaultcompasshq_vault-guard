@@ -33,6 +33,28 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    groups:
+      # THE CODEQL SUB-ACTIONS MOVE TOGETHER OR NOT AT ALL.
+      #
+      # `github/codeql-action/init`, `/autobuild`, `/analyze` and
+      # `/upload-sarif` are separate Dependabot dependencies and one product.
+      # The analysis refuses to run when they disagree:
+      #
+      #   ##[error]Loaded a configuration file for version '4.37.0',
+      #   but running version '4.38.0'
+      #
+      # Ungrouped, Dependabot opened one pull request per sub-action, so each
+      # one bumped a single step and left the others behind. Every such pull
+      # request fails CodeQL, and CodeQL is a REQUIRED check here, so they can
+      # never merge and the bump never lands. Two were stuck this way on
+      # 2026-09-16 (analyze-4.37.9 and autobuild-4.37.9).
+      #
+      # Same disease as the version pins elsewhere in this repository: one
+      # product pinned in several places, with an updater that moves them one
+      # at a time.
+      codeql:
+        patterns:
+          - "github/codeql-action*"
     labels:
       - dependencies
       - github-actions
