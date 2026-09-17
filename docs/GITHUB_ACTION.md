@@ -44,6 +44,27 @@ binary is called by absolute path. The step then chdirs into the scan root,
 because vault-guard reads its config, resolves the trust base and reports every
 path relative to its own process cwd.
 
+The install also passes `--ignore-scripts`, so nothing in the resolved tree runs
+code on the runner at install time, and the step then runs `npm audit
+signatures` over what it installed.
+
+**What that verification proves, and what it does not.** It asks the registry
+for each name and version in the tree — the scanner included — and checks the
+registry signature served back, so an unpublished, replaced or unsigned package
+fails the step. It does **not** read the installed files: npm refetches manifests
+rather than hashing anything on disk, so it will not detect a tampered install.
+It does **not** defeat a compromised registry, which signs what it serves. And a
+**missing** attestation is not a failure, only a missing or invalid signature is,
+so it does not require provenance even though these packages publish it.
+
+> **This step needs a registry that serves `/-/npm/v1/keys`.** If your runner
+> points npm at a mirror or a proxy that does not — via `actions/setup-node`'s
+> `registry-url:`, a corporate `~/.npmrc`, or `npm_config_registry` — the
+> install will succeed and this step will then fail with
+> `EMISSINGSIGNATUREKEY`. A sigstore or TUF outage has the same effect. The
+> step fails closed on purpose, so that is a red gate rather than a skipped
+> check; if it blocks you, pin to `@v1.7.2`, which does not verify.
+
 **What this does not cover.** A `pull_request` run uses the workflow file as it
 is in the merge commit, so a pull request can edit or delete this step like any
 other CI step. Branch protection on the base branch, with review required for

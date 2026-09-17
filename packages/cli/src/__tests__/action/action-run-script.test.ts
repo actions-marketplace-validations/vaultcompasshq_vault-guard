@@ -353,21 +353,43 @@ describe('action.yml "Install vault-guard outside the workspace"', () => {
     expect(argvLine).toContain('--ignore-scripts');
   });
 
-  it('verifies what it installed came from where it claims', () => {
-    // The packages publish SLSA provenance attestations through the OIDC
-    // trusted-publisher path. Publishing them and never checking them buys
-    // nothing: the gate that decides whether a repository is carrying secrets
-    // was installing itself unverified, so a compromised registry or publish
-    // account replaced the judge and nothing in the run would have said so.
-    //
-    // `npm audit signatures` is the check, and it FAILS CLOSED because the
-    // step runs under `set -eu`. What it proves is bounded and worth stating:
-    // it verifies the signatures and attestations that exist. A dependency
-    // that publishes no attestation is not a failure, so this raises the cost
-    // of substituting our own package without pretending to cover the whole
-    // tree.
+  it('checks the registry still serves every name and version it installed', () => {
+    // Deliberately NOT titled "verifies what it installed". `npm audit
+    // signatures` refetches manifests from the registry and checks the
+    // signatures served back; it hashes nothing on disk, so a tampered install
+    // passes it. Measured: appending a payload to the installed binary and
+    // re-running the command exits 0. The honest claim is the title.
     const run = runInstall();
     expect(run.record).toContain('argv=audit signatures');
+  });
+
+  it('declares the scanner as a dependency, or the audit silently skips it', () => {
+    // THE BUG THIS EXISTS FOR, found in review of the first version of this
+    // step. `npm audit signatures` audits the tree's EDGES OUT. A global
+    // install leaves `<prefix>/lib` with a `node_modules` and no manifest, so
+    // the root declares nothing, the package just installed is on the far end
+    // of no edge, and the audit covers its dependencies while skipping the
+    // scanner -- the one package the check exists for.
+    //
+    // Measured on a real install: 13 added, 12 audited without this file; 13
+    // audited and 5 attestations with it. The first version of this step
+    // recorded that 12 as evidence the check worked.
+    const runner = makeRunner();
+    const scriptFile = path.join(runner.dir, 'install.sh');
+    writeFileSync(scriptFile, action.extractRunScript(INSTALL_STEP));
+    execFileSync('bash', ['--noprofile', '--norc', '-eo', 'pipefail', scriptFile], {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      cwd: action.cwdForStep(INSTALL_STEP, runner.ctx),
+      env: stepEnvironment(runner, INSTALL_STEP, {}),
+    });
+
+    const manifestPath = path.join(runner.runnerTemp, 'vault-guard-action', 'lib', 'package.json');
+    expect(existsSync(manifestPath)).toBe(true);
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'));
+    // The declared version has to be the one being installed, or the audit
+    // checks a different package than the one that landed.
+    expect(manifest.dependencies['@vaultcompass/vault-guard']).toBe(runner.ctx.inputs.version);
   });
 
   it('verifies AFTER installing, and refuses to run a binary it could not verify', () => {

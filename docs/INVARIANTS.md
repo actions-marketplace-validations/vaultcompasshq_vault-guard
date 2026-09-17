@@ -85,27 +85,51 @@ here: the only native dependency is `better-sqlite3`, it is an OPTIONAL
 dependency of the telemetry package, and the store degrades when its bindings
 are missing.
 
-`npm audit signatures` after the install, because the packages publish SLSA
-provenance attestations through the OIDC trusted-publisher path and publishing
-attestations nobody checks buys nothing. Until this existed, the gate deciding
-whether a repository carried secrets installed itself unverified, so a
-compromised registry or publish account could replace the judge with no part of
-the run saying so. It runs under `set -eu`, so it fails the step: a scanner that
-cannot be verified must not go on to render a verdict.
+`npm audit signatures` after the install. **Read the next paragraphs before
+relying on it**, because the obvious summary of this command is wrong and the
+first version of this entry asserted three things it does not do.
 
-WHAT THE VERIFICATION PROVES IS BOUNDED. It verifies the registry signatures and
-attestations that EXIST; a dependency publishing neither is not a failure. It
-raises the cost of substituting our own package. It does not certify the tree.
+WHAT IT DOES. It asks the registry for each name and version in the tree and
+checks the registry signature served back. Every name and version, the scanner
+included, has to be one npmjs currently serves with a valid signature. That
+catches an unpublished, replaced or unsigned package at the moment of install,
+and it fails closed under `set -eu`.
+
+WHAT IT DOES NOT DO, each measured rather than reasoned. It does not read the
+installed files: `pacote` refetches the manifest instead of hashing anything on
+disk, so a tampered install is invisible — appending a payload to the installed
+binary and re-running the command exits 0. It does not defeat a compromised
+registry, which signs what it serves. And a MISSING attestation is not a
+failure, only a missing or invalid signature is, so it does not require
+provenance despite these packages publishing it.
+
+THE ROOT MANIFEST IS LOAD-BEARING. `npm audit signatures` audits the tree's
+EDGES OUT, and a global install leaves `<prefix>/lib` with a `node_modules` and
+no manifest, so the root declares nothing and the installed package sits on the
+far end of no edge. Without a manifest the audit covers the dependencies and
+SKIPS THE SCANNER, the one package the check exists for. Measured: 13 packages
+installed, 12 audited without it, 13 audited and 5 attestations with it. The
+first version of this step shipped without the manifest and recorded that 12 as
+evidence the check worked — the numbers disproved the claim in the same sentence
+that made it, which is the failure this file exists to catch.
+
+KNOWN CONSEQUENCE OF FAILING CLOSED: a consumer whose runner points npm at a
+mirror or proxy that does not serve `/-/npm/v1/keys` installs fine and then
+fails here with `EMISSINGSIGNATUREKEY`, and a sigstore or TUF outage does the
+same to everyone at once. Written down in `docs/GITHUB_ACTION.md` rather than
+left to be discovered from a red required check.
 
 **Enforced by:** `action-run-script.test.ts` (the argv carries the flag, the
-audit is recorded, and the audit comes after the install), the text guards in
+manifest is written declaring the version being installed, the audit is
+recorded, and the audit comes after the install), the text guards in
 `action-path-validation.test.ts`, and `scripts/test-action-path-validation.sh`,
 which refuses ANY `npm install` line in the file lacking the flag. The jest
-suites run against a stubbed npm, so what they prove is that the action ASKS;
-they say nothing about what a real npm does when asked. Verified by hand against
-the registry at 1.7.0: a global `--ignore-scripts` install scans a clean tree to
-the same 627 bytes and the same exit 0, and `npm audit signatures` over that
-tree reports 12 verified registry signatures and 4 verified attestations.
+suites run against a STUBBED npm, so they prove the action ASKS and say nothing
+about what a real npm does when asked — and that gap is precisely what hid the
+missing manifest, since the stub laid down an empty `lib` where the real command
+would have reported 12 of 13. Verified by hand against the registry at 1.7.0: a
+global `--ignore-scripts` install scans a clean tree to the same 627 bytes and
+the same exit 0 as one without the flag.
 
 ## The scan path is absolute AND resolved, and that is one decision with two halves
 

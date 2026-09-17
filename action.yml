@@ -462,28 +462,54 @@ runs:
         # a clean tree to the same bytes and the same exit 0 as one without it.
         npm install -g --ignore-scripts "@vaultcompass/vault-guard@${VG_VERSION}"
 
-        # THEN VERIFY WHAT ARRIVED. The packages carry SLSA provenance
-        # attestations, published through the OIDC trusted-publisher path.
-        # Publishing attestations and never checking them buys nothing: until
-        # this line, the gate that decides whether a repository is carrying
-        # secrets installed itself unverified, so a compromised registry or
-        # publish account could replace the judge and no part of the run would
-        # have said so.
+        # A ROOT MANIFEST, WITHOUT WHICH THE NEXT COMMAND SKIPS THE ONE PACKAGE
+        # IT EXISTS TO CHECK.
         #
-        # Under `set -eu` this fails the step, which is the point: a scanner
-        # that cannot be verified must not go on to render a verdict. Ordering
-        # matters for the same reason -- before the install there is no tree to
-        # check, and after the scan it would be an audit note rather than a
-        # gate.
+        # `npm audit signatures` audits the tree's EDGES OUT: it loads the
+        # local prefix and walks what the root declares as dependencies. A
+        # global install leaves `<prefix>/lib` holding a `node_modules` and NO
+        # manifest, so the root declares nothing and the package just installed
+        # is not on the far end of any edge. Its transitive dependencies are,
+        # so they get audited and the scanner itself does not.
         #
-        # WHAT IT PROVES IS BOUNDED, and worth being honest about. It verifies
-        # the registry signatures and attestations that EXIST; a dependency
-        # publishing neither is not a failure. So this raises the cost of
-        # substituting our own package, and does not certify the whole tree.
+        # Measured, because the discrepancy is quiet: the install reports
+        # `added 13 packages` and, without this file, the audit reports
+        # `audited 12`. Adding it takes the same tree to 13 audited and 5
+        # attestations. The first version of this step shipped without it and
+        # recorded that 12 as evidence the check worked.
+        printf '{"name":"vault-guard-action-verify","private":true,"dependencies":{"@vaultcompass/vault-guard":"%s"}}\n' \
+          "${VG_VERSION}" > "${npm_config_prefix}/lib/package.json"
+
+        # WHAT THIS COMMAND PROVES, narrowly, because the tempting summary is
+        # false. It asks the registry for each name and version in the tree and
+        # checks the registry signature served back.
+        #
+        # It does NOT read the installed files. `pacote` refetches the manifest
+        # rather than hashing anything on disk, so a tampered install is
+        # invisible: appending a payload to the installed binary and re-running
+        # this exits 0.
+        #
+        # It does NOT defeat a compromised registry, which signs what it
+        # serves. And a MISSING attestation is not a failure -- only a missing
+        # or invalid signature is -- so it does not require provenance either,
+        # despite these packages publishing it.
+        #
+        # What remains is still worth having: every name and version in the
+        # tree, the scanner included, has to be one npmjs currently serves with
+        # a valid registry signature. That catches an unpublished, replaced or
+        # unsigned package at the moment of install.
+        #
+        # Fails closed under `set -eu`, deliberately. KNOWN CONSEQUENCE: a
+        # consumer whose runner points npm at a mirror or proxy that does not
+        # serve `/-/npm/v1/keys` installs fine and then fails here with
+        # EMISSINGSIGNATUREKEY, and a sigstore or TUF outage does the same to
+        # everyone at once. That trade is written down in
+        # docs/GITHUB_ACTION.md rather than left for a consumer to discover
+        # from a red required check.
         #
         # Run from the prefix's `lib`, which is where a global install puts the
-        # tree npm reads. This is the Linux and macOS layout, the same
-        # assumption the PATH line below already makes.
+        # tree npm reads. Linux and macOS layout, the same assumption the PATH
+        # line below already makes.
         cd "${npm_config_prefix}/lib"
         npm audit signatures
 
