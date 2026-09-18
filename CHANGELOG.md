@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **The Action no longer runs install scripts, and verifies what it installed.**
+  The install step ran `npm install -g` with no `--ignore-scripts`, on a runner
+  holding the job's token, so every package in the resolved tree had arbitrary
+  code execution there on every run. It now passes `--ignore-scripts`, which
+  costs nothing here: the only native dependency is `better-sqlite3`, it is an
+  optional dependency of the telemetry package, and the store degrades when its
+  bindings are missing.
+
+  Separately, the packages publish SLSA provenance attestations through the OIDC
+  trusted-publisher path, and nothing checked them. The step now runs
+  `npm audit signatures` over the installed tree, under `set -eu`, so a scanner
+  that cannot be verified fails the step rather than going on to render a
+  verdict.
+
+  What the verification proves, stated narrowly because the obvious summary is
+  wrong: it asks the registry for each name and version in the tree, the scanner
+  included, and checks the signature served back, so an unpublished, replaced or
+  unsigned package fails the step. It does **not** read the installed files, so
+  a tampered install is invisible to it; it does **not** defeat a compromised
+  registry, which signs what it serves; and a **missing** attestation is not a
+  failure, so it does not require provenance despite these packages publishing
+  it.
+
+  **This step needs a registry that serves `/-/npm/v1/keys`.** A runner pointed
+  at a mirror or proxy that does not, or a sigstore outage, installs fine and
+  then fails here with `EMISSINGSIGNATUREKEY`. It fails closed on purpose. Pin
+  to `@v1.7.2` if that blocks you; see `docs/GITHUB_ACTION.md`.
+
+  Reported by a consumer, which declined to add a second guard to its required
+  checks until this was closed.
+
 ## [1.7.2] - 2026-09-16
 
 **An action-only release. The tag moves; the npm packages do not.** Nothing

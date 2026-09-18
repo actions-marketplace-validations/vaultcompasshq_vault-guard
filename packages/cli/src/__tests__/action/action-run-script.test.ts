@@ -104,7 +104,7 @@ interface Runner {
 // workflow with an earlier install step actually produces. Without that
 // ordering, "the planted copy never ran" would hold for the uninteresting reason
 // that nothing could have reached it.
-function makeRunner(inputs: Record<string, string> = {}): Runner {
+function makeRunner(inputs: Record<string, string> = {}, npmVersion = '10.9.2'): Runner {
   const dir = mkdtempSync(path.join(tmpdir(), 'vault-guard-action-'));
   const workspace = path.join(dir, 'workspace');
   const runnerTemp = path.join(dir, 'runner-temp');
@@ -140,11 +140,24 @@ function makeRunner(inputs: Record<string, string> = {}): Runner {
   // the point: npm started inside the checkout reads the head's `.npmrc`,
   // package.json and lockfile, and no assertion about the run step can see that,
   // because by then the install has already happened.
+  // The stub also CREATES `<prefix>/lib`, because a real global install does
+  // and the step verifies the installed tree from inside it. A stub that
+  // recorded the argv without laying the directory down would make the
+  // verification step abort on a missing cwd, which is the harness failing
+  // rather than the action -- and would hide whether the action verifies at
+  // all.
   writeFileSync(
     path.join(pathDir, 'npm'),
     `#!/bin/sh\nprintf 'cwd=%s\\n' "$(pwd -P)" >> ${JSON.stringify(npmRecord)}\n` +
       `printf 'argv=%s\\n' "$*" >> ${JSON.stringify(npmRecord)}\n` +
       `printf 'prefix=%s\\n' "\${npm_config_prefix:-unset}" >> ${JSON.stringify(npmRecord)}\n` +
+      // A real npm answers `--version`, and the step now reads it: below
+      // 10.6.0 the verification calls a clean install tampered with. Written
+      // with `%b` so a test can hand it MULTIPLE lines and reproduce a client
+      // printing an upgrade notice above its version, the shape that defeated
+      // two earlier versions of the floor.
+      `case "$1" in --version) printf '%b\\n' "${npmVersion}" ;; ` +
+      'install) mkdir -p "${npm_config_prefix}/lib" ;; esac\n' +
       'exit 0\n',
   );
   chmodSync(path.join(pathDir, 'npm'), 0o755);
@@ -296,12 +309,14 @@ describe('action.yml "Install vault-guard outside the workspace"', () => {
   it('installs the pinned version globally, and nothing else', () => {
     const run = runInstall();
     expect(run.status).toBe(0);
-    expect(run.record).toContain('argv=install -g @vaultcompass/vault-guard@1.7.0');
+    expect(run.record).toContain(
+      'argv=install -g --ignore-scripts @vaultcompass/vault-guard@1.7.0',
+    );
   });
 
   it('installs the version the input asked for, not a hardcoded one', () => {
     expect(runInstall({ version: '1.6.0' }).record).toContain(
-      'argv=install -g @vaultcompass/vault-guard@1.6.0',
+      'argv=install -g --ignore-scripts @vaultcompass/vault-guard@1.6.0',
     );
   });
 
@@ -323,6 +338,147 @@ describe('action.yml "Install vault-guard outside the workspace"', () => {
     expect(prefixLine).not.toBe('prefix=unset');
     expect(prefixLine).toContain(path.basename(run.runner.runnerTemp));
     expect(prefixLine).not.toContain(`${path.sep}workspace`);
+  });
+
+  // Runs the install step with a stub npm that answers `--version` however the
+  // caller asks, and reports whether the step got as far as installing.
+  function runInstallWithNpm(npmVersion: string): { status: number; record: string } {
+    const runner = makeRunner({}, npmVersion);
+    const scriptFile = path.join(runner.dir, 'install.sh');
+    writeFileSync(scriptFile, action.extractRunScript(INSTALL_STEP));
+    let status = 0;
+    try {
+      execFileSync('bash', ['--noprofile', '--norc', '-eo', 'pipefail', scriptFile], {
+        encoding: 'utf-8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+        cwd: action.cwdForStep(INSTALL_STEP, runner.ctx),
+        env: stepEnvironment(runner, INSTALL_STEP, {}),
+      });
+    } catch (err) {
+      const e = err as { status?: number };
+      status = typeof e.status === 'number' ? e.status : -1;
+    }
+    return {
+      status,
+      record: existsSync(runner.npmRecord) ? readFileSync(runner.npmRecord, 'utf-8') : '',
+    };
+  }
+
+  it('refuses an npm too old to verify, rather than calling a clean install tampered with', () => {
+    // `npm audit signatures` is not version-stable. Below 10.6.0 it fails on a
+    // CLEAN install of these very packages: on 10.5.0 it says "Someone might
+    // have tampered with these packages", naming ours; on 10.2.4 it is
+    // EEXPIREDSIGNATUREKEY. Both false, both alarming.
+    //
+    // THE SETUP-NODE STEP DOES NOT COVER THIS, which is why the check exists
+    // here at all. `node-version: '22'` is a major-only spec and Node 22.0.0
+    // ships npm 10.5.1, inside the failing band.
+    for (const old of ['8.19.4', '9.9.4', '10.2.4', '10.5.0', '10.5.1']) {
+      const run = runInstallWithNpm(old);
+      expect([old, run.status]).not.toEqual([old, 0]);
+      // And it must not have installed anything with a client it cannot use.
+      expect([old, run.record.includes('argv=install')]).toEqual([old, false]);
+    }
+  });
+
+  it('accepts the first npm that actually verifies, and newer', () => {
+    // The floor must not be too high either: 10.6.0 is the first version
+    // measured to pass, so refusing it would break consumers for nothing.
+    for (const ok of ['10.6.0', '10.9.2', '11.0.0']) {
+      expect([ok, runInstallWithNpm(ok).status]).toEqual([ok, 0]);
+    }
+  });
+
+  it('still reads the version when npm prints a notice above it', () => {
+    // The shape that defeated two earlier versions of this floor. A per-line
+    // shape check passed, then the arithmetic read the WHOLE string, errored,
+    // the `if` read false, and the floor was skipped on a client it exists to
+    // refuse.
+    const old = runInstallWithNpm('npm notice a new version is available\\n10.5.0');
+    expect(old.status).not.toBe(0);
+    expect(old.record.includes('argv=install')).toBe(false);
+
+    // The same shape must not refuse a client that is fine.
+    expect(runInstallWithNpm('npm notice a new version is available\\n10.9.2').status).toBe(0);
+  });
+
+  it('refuses rather than assumes when it cannot read a version at all', () => {
+    // A guard that fails open when it cannot see is not a guard.
+    for (const unreadable of ['', 'not a version']) {
+      const run = runInstallWithNpm(unreadable);
+      expect([unreadable, run.status]).not.toEqual([unreadable, 0]);
+      expect([unreadable, run.record.includes('argv=install')]).toEqual([unreadable, false]);
+    }
+  });
+
+  it('never lets an installed package run its own install scripts', () => {
+    // The scanner is a control input, and this step runs on a runner holding
+    // the job's token. Without `--ignore-scripts` every package in the
+    // resolved tree gets arbitrary code execution there on every run, which is
+    // a strange amount of trust for the tool whose whole job is deciding
+    // whether this repository can be trusted.
+    //
+    // It costs nothing here. `better-sqlite3` is the only native dependency,
+    // it is an OPTIONAL dependency of the telemetry package, and the store
+    // degrades when its bindings are missing -- `store-unavailable.test.ts`
+    // covers exactly the "an --ignore-scripts install" case by name. Verified
+    // against the real registry too: a global install with the flag scans a
+    // clean tree to the same 627 bytes and the same exit 0 as one without it.
+    const run = runInstall();
+    const argvLine = run.record.split('\n').find((l) => l.startsWith('argv=install'));
+    expect(argvLine).toBeDefined();
+    expect(argvLine).toContain('--ignore-scripts');
+  });
+
+  it('checks the registry still serves every name and version it installed', () => {
+    // Deliberately NOT titled "verifies what it installed". `npm audit
+    // signatures` refetches manifests from the registry and checks the
+    // signatures served back; it hashes nothing on disk, so a tampered install
+    // passes it. Measured: appending a payload to the installed binary and
+    // re-running the command exits 0. The honest claim is the title.
+    const run = runInstall();
+    expect(run.record).toContain('argv=audit signatures');
+  });
+
+  it('declares the scanner as a dependency, or the audit silently skips it', () => {
+    // THE BUG THIS EXISTS FOR, found in review of the first version of this
+    // step. `npm audit signatures` audits the tree's EDGES OUT. A global
+    // install leaves `<prefix>/lib` with a `node_modules` and no manifest, so
+    // the root declares nothing, the package just installed is on the far end
+    // of no edge, and the audit covers its dependencies while skipping the
+    // scanner -- the one package the check exists for.
+    //
+    // Measured on a real install: 13 added, 12 audited without this file; 13
+    // audited and 5 attestations with it. The first version of this step
+    // recorded that 12 as evidence the check worked.
+    const runner = makeRunner();
+    const scriptFile = path.join(runner.dir, 'install.sh');
+    writeFileSync(scriptFile, action.extractRunScript(INSTALL_STEP));
+    execFileSync('bash', ['--noprofile', '--norc', '-eo', 'pipefail', scriptFile], {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      cwd: action.cwdForStep(INSTALL_STEP, runner.ctx),
+      env: stepEnvironment(runner, INSTALL_STEP, {}),
+    });
+
+    const manifestPath = path.join(runner.runnerTemp, 'vault-guard-action', 'lib', 'package.json');
+    expect(existsSync(manifestPath)).toBe(true);
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'));
+    // The declared version has to be the one being installed, or the audit
+    // checks a different package than the one that landed.
+    expect(manifest.dependencies['@vaultcompass/vault-guard']).toBe(runner.ctx.inputs.version);
+  });
+
+  it('verifies AFTER installing, never before', () => {
+    // Ordering is the whole control. A verification that ran before the
+    // install would be checking a tree that does not exist yet, and one that
+    // ran after the scan would be an audit note rather than a gate.
+    const run = runInstall();
+    const lines = run.record.split('\n');
+    const installAt = lines.findIndex((l) => l.startsWith('argv=install'));
+    const auditAt = lines.findIndex((l) => l.startsWith('argv=audit signatures'));
+    expect([installAt, auditAt].every((i) => i !== -1)).toBe(true);
+    expect(auditAt).toBeGreaterThan(installAt);
   });
 
   it('the binary the run step calls is the one this step installs', () => {

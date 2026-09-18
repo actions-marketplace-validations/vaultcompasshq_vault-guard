@@ -72,6 +72,68 @@ the action does substitutes for it. The absolute binary path is likewise not
 total: the shim starts with `#!/usr/bin/env node`, so the interpreter is still a
 PATH lookup a cooperating workflow can influence.
 
+## The scanner is installed without scripts, and verified before it is trusted
+
+Two properties of the same step, and both follow from the scanner being a
+CONTROL INPUT rather than an ordinary dependency.
+
+`--ignore-scripts`, because this step runs on a runner holding the job's token.
+Without it every package in the resolved tree gets arbitrary code execution
+there on every run, which is a strange amount of trust to extend from the tool
+whose job is deciding whether this repository can be trusted. It costs nothing
+here: the only native dependency is `better-sqlite3`, it is an OPTIONAL
+dependency of the telemetry package, and the store degrades when its bindings
+are missing.
+
+`npm audit signatures` after the install. **Read the next paragraphs before
+relying on it**, because the obvious summary of this command is wrong and the
+first version of this entry asserted three things it does not do.
+
+WHAT IT DOES. It asks the registry for each name and version in the tree and
+checks the registry signature served back. Every name and version, the scanner
+included, has to be one npmjs currently serves with a valid signature. That
+catches an unpublished, replaced or unsigned package at the moment of install,
+and it fails closed under `set -eu`.
+
+WHAT IT DOES NOT DO, each measured rather than reasoned. It does not read the
+installed files: `pacote` refetches the manifest instead of hashing anything on
+disk, so a tampered install is invisible — appending a payload to the installed
+binary and re-running the command exits 0. It does not defeat a compromised
+registry, which signs what it serves. And a MISSING attestation is not a
+failure, only a missing or invalid signature is, so it does not require
+provenance despite these packages publishing it.
+
+THE ROOT MANIFEST IS LOAD-BEARING. `npm audit signatures` audits the tree's
+EDGES OUT, and a global install leaves `<prefix>/lib` with a `node_modules` and
+no manifest, so the root declares nothing and the installed package sits on the
+far end of no edge. Without a manifest the audit covers the dependencies and
+SKIPS THE SCANNER, the one package the check exists for. Measured: 13 packages
+installed, 12 audited without it, 13 audited and 5 attestations with it. The
+first version of this step shipped without the manifest and recorded that 12 as
+evidence the check worked — the numbers disproved the claim in the same sentence
+that made it, which is the failure this file exists to catch.
+
+KNOWN CONSEQUENCE OF FAILING CLOSED: a consumer whose runner points npm at a
+mirror or proxy that does not serve `/-/npm/v1/keys` installs fine and then
+fails here with `EMISSINGSIGNATUREKEY`, and a sigstore or TUF outage does the
+same to everyone at once. Written down in `docs/GITHUB_ACTION.md` rather than
+left to be discovered from a red required check.
+
+**Enforced by:** `action-run-script.test.ts` (the argv carries the flag, the
+manifest is written declaring the version being installed, the audit is
+recorded, and the audit comes after the install), the text guards in
+`action-path-validation.test.ts`, and `scripts/test-action-path-validation.sh`,
+which refuses ANY `npm install` line in the file lacking the flag. The jest
+suites run against a STUBBED npm, so they prove the action ASKS and say nothing
+about what a real npm does when asked — and that gap is precisely what hid the
+missing manifest, since the stub laid down an empty `lib` where the real command
+would have reported 12 of 13. Verified by hand against the registry at 1.7.0:
+two global installs of `@vaultcompass/vault-guard@1.7.0`, one with
+`--ignore-scripts` and one without, scanning the same clean tree, produce
+byte-identical output apart from the `scannedAt` timestamp, both exiting 0. An
+earlier version of this paragraph cited a byte count without naming the tree or
+the flags, which nobody could reproduce.
+
 ## The scan path is absolute AND resolved, and that is one decision with two halves
 
 The run step starts in the runner temp, so the scan root is built from
