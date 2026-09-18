@@ -469,7 +469,7 @@ describe('action.yml "Install vault-guard outside the workspace"', () => {
     expect(manifest.dependencies['@vaultcompass/vault-guard']).toBe(runner.ctx.inputs.version);
   });
 
-  it('verifies AFTER installing, and refuses to run a binary it could not verify', () => {
+  it('verifies AFTER installing, never before', () => {
     // Ordering is the whole control. A verification that ran before the
     // install would be checking a tree that does not exist yet, and one that
     // ran after the scan would be an audit note rather than a gate.

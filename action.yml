@@ -498,11 +498,20 @@ runs:
         # the tool whose job is deciding whether this repository can be
         # trusted.
         #
-        # It costs nothing. The only native dependency is `better-sqlite3`, it
-        # is an OPTIONAL dependency of the telemetry package, and the store
-        # degrades when its bindings are missing; `store-unavailable.test.ts`
-        # covers that case by name. A real global install with this flag scans
-        # a clean tree to the same bytes and the same exit 0 as one without it.
+        # It costs nothing, and the real reason is simpler than the one this
+        # comment used to give. NO PACKAGE ANYWHERE IN THE PUBLISHED TREE HAS
+        # an install, preinstall, postinstall or prepare script, so the flag
+        # removes nothing that would have run. `better-sqlite3` is the only
+        # native dependency, it ships prebuilds for every platform in its
+        # tarball, and it is in any case an OPTIONAL dependency of the
+        # telemetry package whose store degrades when its bindings are missing
+        # (`store-unavailable.test.ts`). That degradation path is a backstop
+        # rather than what makes this safe, and saying so matters: a future
+        # dependency that DID add an install script would invalidate the
+        # argument without anyone noticing, because the backstop would still be
+        # there. Measured: two real global installs, one with the flag and one
+        # without, scan the same clean tree to byte-identical output apart from
+        # the timestamp, both exiting 0.
         npm install -g --ignore-scripts "@vaultcompass/vault-guard@${VG_VERSION}"
 
         # A ROOT MANIFEST, WITHOUT WHICH THE NEXT COMMAND SKIPS THE ONE PACKAGE

@@ -127,9 +127,12 @@ which refuses ANY `npm install` line in the file lacking the flag. The jest
 suites run against a STUBBED npm, so they prove the action ASKS and say nothing
 about what a real npm does when asked — and that gap is precisely what hid the
 missing manifest, since the stub laid down an empty `lib` where the real command
-would have reported 12 of 13. Verified by hand against the registry at 1.7.0: a
-global `--ignore-scripts` install scans a clean tree to the same 627 bytes and
-the same exit 0 as one without the flag.
+would have reported 12 of 13. Verified by hand against the registry at 1.7.0:
+two global installs of `@vaultcompass/vault-guard@1.7.0`, one with
+`--ignore-scripts` and one without, scanning the same clean tree, produce
+byte-identical output apart from the `scannedAt` timestamp, both exiting 0. An
+earlier version of this paragraph cited a byte count without naming the tree or
+the flags, which nobody could reproduce.
 
 ## The scan path is absolute AND resolved, and that is one decision with two halves
 
