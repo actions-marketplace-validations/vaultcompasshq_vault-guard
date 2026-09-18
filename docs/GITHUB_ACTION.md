@@ -14,8 +14,8 @@ The composite action in the **repository root** installs the published
 
 ## The Action tag and the scanner version are two numbers
 
-`vaultcompasshq/vault-guard@v1.7.2` installs
-`@vaultcompass/vault-guard@1.7.0`. 1.7.1 and 1.7.2 were both action-only
+`vaultcompasshq/vault-guard@v1.7.3` installs
+`@vaultcompass/vault-guard@1.7.0`. 1.7.1, 1.7.2 and 1.7.3 were all action-only
 releases: they changed the Action and nothing in the scanner, so there was no
 new scanner to publish.
 Read the tag as "which version of the workflow step", not as "which version of
@@ -187,7 +187,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
-      - uses: vaultcompasshq/vault-guard@v1.7.2
+      - uses: vaultcompasshq/vault-guard@v1.7.3
         with:
           format: sarif
 ```
@@ -219,7 +219,7 @@ not a clean scan and must not be reported as findings either.
 
 ```yaml
 - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-- uses: vaultcompasshq/vault-guard@v1.7.2
+- uses: vaultcompasshq/vault-guard@v1.7.3
   id: vg
   with:
     format: text
@@ -256,7 +256,7 @@ of its own:
       # the step fails with a 403 that says nothing about the scan.
       security-events: write
     steps:
-      - uses: vaultcompasshq/vault-guard@v1.7.2
+      - uses: vaultcompasshq/vault-guard@v1.7.3
         id: vg
         with:
           format: sarif

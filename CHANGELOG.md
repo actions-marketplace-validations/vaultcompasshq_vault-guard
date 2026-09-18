@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.3] - 2026-09-18
+
+**An action-only release. The tag moves; the npm packages do not.** Nothing in
+the scanner changed, so `@vaultcompass/vault-guard` and the other three packages
+stay at 1.7.0 on npm, and the Action's `version` default stays `1.7.0`.
+`vaultcompasshq/vault-guard@v1.7.3` installs `@vaultcompass/vault-guard@1.7.0`.
+
+### Fixed
+
+- **A floor on the npm client, so the Action cannot report a clean install as
+  tampered with.** `npm audit signatures`, added below, is not version-stable:
+  below npm **10.6.0** it fails on an untampered install of these very
+  packages, because the client's own bundled keys and TUF root are stale. On
+  10.5.0 it reports *"Someone might have tampered with these packages since
+  they were published on the registry!"*, naming ours; on 10.2.4 it is
+  `EEXPIREDSIGNATUREKEY`. Bisected against a real install: 8.19.4, 9.9.4,
+  10.2.4 and 10.5.0 fail; 10.6.0 and later pass.
+
+  The Action now refuses up front and names the npm it found, so a stale client
+  is reported as a stale client rather than as a supply-chain incident.
+
+  **`node-version: '22'` is not on its own sufficient**, which is why this
+  Action carries the floor despite installing its own Node. It is a major-only
+  spec and **Node 22.0.0 ships npm 10.5.1**, inside the failing band;
+  `setup-node` satisfies a major from the runner's tool cache when it can. Pin
+  22.1.0 or later.
+
 ### Security
 
 - **The Action no longer runs install scripts, and verifies what it installed.**
