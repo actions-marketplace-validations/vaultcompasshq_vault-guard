@@ -384,7 +384,13 @@ describe('action.yml "Install vault-guard outside the workspace"', () => {
   it('accepts the first npm that actually verifies, and newer', () => {
     // The floor must not be too high either: 10.6.0 is the first version
     // measured to pass, so refusing it would break consumers for nothing.
-    for (const ok of ['10.6.0', '10.9.2', '11.0.0']) {
+    // 10.5.2 is the FIRST version measured to pass, with a cold cache and a
+    // fresh HOME so no newer client could have primed the key set. It is
+    // listed first deliberately: the floor was 10.6.0 until a review bisected
+    // properly, and that wrong number hard-refused Node 20.13.0 and 20.13.1,
+    // which ship 10.5.2. A floor that is too high is a false accusation of a
+    // different kind, so both edges are pinned.
+    for (const ok of ['10.5.2', '10.6.0', '10.9.2', '11.0.0', '12.0.0']) {
       expect([ok, runInstallWithNpm(ok).status]).toEqual([ok, 0]);
     }
   });

@@ -57,13 +57,29 @@ It does **not** defeat a compromised registry, which signs what it serves. And a
 **missing** attestation is not a failure, only a missing or invalid signature is,
 so it does not require provenance even though these packages publish it.
 
-> **This step needs a registry that serves `/-/npm/v1/keys`.** If your runner
-> points npm at a mirror or a proxy that does not — via `actions/setup-node`'s
+> **Two ways this step fails closed, both on purpose.**
+>
+> **It needs npm 10.5.2 or newer.** `npm audit signatures` is not
+> version-stable: below 10.5.2 it fails on a *clean, untampered* install of
+> these packages, because the client's own bundled keys and TUF root are stale.
+> On npm 10.5.0 it reports "Someone might have tampered with these packages
+> since they were published on the registry!", naming ours. The Action refuses
+> up front and names the npm it found, so a stale client is reported as a stale
+> client rather than as a supply-chain incident.
+>
+> This Action installs its own Node 22, and **that is not on its own
+> sufficient**: `node-version` is a major-only spec and **Node 22.0.0 ships npm
+> 10.5.1**, one patch below the floor, and `setup-node` satisfies a major from
+> the runner's tool cache when it can. The floor is enforced rather than
+> assumed. Node 20.13.0 and later, and 22.1.0 and later, carry a usable npm.
+>
+> **It needs a registry that serves `/-/npm/v1/keys`.** If your runner points
+> npm at a mirror or a proxy that does not — via `actions/setup-node`'s
 > `registry-url:`, a corporate `~/.npmrc`, or `npm_config_registry` — the
 > install will succeed and this step will then fail with
-> `EMISSINGSIGNATUREKEY`. A sigstore or TUF outage has the same effect. The
-> step fails closed on purpose, so that is a red gate rather than a skipped
-> check; if it blocks you, pin to `@v1.7.2`, which does not verify.
+> `EMISSINGSIGNATUREKEY`. A sigstore or TUF outage has the same effect.
+>
+> If either blocks you, pin to `@v1.7.2`, which does not verify.
 
 **What this does not cover.** A `pull_request` run uses the workflow file as it
 is in the merge commit, so a pull request can edit or delete this step like any
