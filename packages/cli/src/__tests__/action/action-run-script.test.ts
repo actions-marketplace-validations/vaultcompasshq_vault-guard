@@ -104,7 +104,7 @@ interface Runner {
 // workflow with an earlier install step actually produces. Without that
 // ordering, "the planted copy never ran" would hold for the uninteresting reason
 // that nothing could have reached it.
-function makeRunner(inputs: Record<string, string> = {}): Runner {
+function makeRunner(inputs: Record<string, string> = {}, npmVersion = '10.9.2'): Runner {
   const dir = mkdtempSync(path.join(tmpdir(), 'vault-guard-action-'));
   const workspace = path.join(dir, 'workspace');
   const runnerTemp = path.join(dir, 'runner-temp');
@@ -151,7 +151,13 @@ function makeRunner(inputs: Record<string, string> = {}): Runner {
     `#!/bin/sh\nprintf 'cwd=%s\\n' "$(pwd -P)" >> ${JSON.stringify(npmRecord)}\n` +
       `printf 'argv=%s\\n' "$*" >> ${JSON.stringify(npmRecord)}\n` +
       `printf 'prefix=%s\\n' "\${npm_config_prefix:-unset}" >> ${JSON.stringify(npmRecord)}\n` +
-      'case "$1" in install) mkdir -p "${npm_config_prefix}/lib" ;; esac\n' +
+      // A real npm answers `--version`, and the step now reads it: below
+      // 10.6.0 the verification calls a clean install tampered with. Written
+      // with `%b` so a test can hand it MULTIPLE lines and reproduce a client
+      // printing an upgrade notice above its version, the shape that defeated
+      // two earlier versions of the floor.
+      `case "$1" in --version) printf '%b\\n' "${npmVersion}" ;; ` +
+      'install) mkdir -p "${npm_config_prefix}/lib" ;; esac\n' +
       'exit 0\n',
   );
   chmodSync(path.join(pathDir, 'npm'), 0o755);
@@ -332,6 +338,77 @@ describe('action.yml "Install vault-guard outside the workspace"', () => {
     expect(prefixLine).not.toBe('prefix=unset');
     expect(prefixLine).toContain(path.basename(run.runner.runnerTemp));
     expect(prefixLine).not.toContain(`${path.sep}workspace`);
+  });
+
+  // Runs the install step with a stub npm that answers `--version` however the
+  // caller asks, and reports whether the step got as far as installing.
+  function runInstallWithNpm(npmVersion: string): { status: number; record: string } {
+    const runner = makeRunner({}, npmVersion);
+    const scriptFile = path.join(runner.dir, 'install.sh');
+    writeFileSync(scriptFile, action.extractRunScript(INSTALL_STEP));
+    let status = 0;
+    try {
+      execFileSync('bash', ['--noprofile', '--norc', '-eo', 'pipefail', scriptFile], {
+        encoding: 'utf-8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+        cwd: action.cwdForStep(INSTALL_STEP, runner.ctx),
+        env: stepEnvironment(runner, INSTALL_STEP, {}),
+      });
+    } catch (err) {
+      const e = err as { status?: number };
+      status = typeof e.status === 'number' ? e.status : -1;
+    }
+    return {
+      status,
+      record: existsSync(runner.npmRecord) ? readFileSync(runner.npmRecord, 'utf-8') : '',
+    };
+  }
+
+  it('refuses an npm too old to verify, rather than calling a clean install tampered with', () => {
+    // `npm audit signatures` is not version-stable. Below 10.6.0 it fails on a
+    // CLEAN install of these very packages: on 10.5.0 it says "Someone might
+    // have tampered with these packages", naming ours; on 10.2.4 it is
+    // EEXPIREDSIGNATUREKEY. Both false, both alarming.
+    //
+    // THE SETUP-NODE STEP DOES NOT COVER THIS, which is why the check exists
+    // here at all. `node-version: '22'` is a major-only spec and Node 22.0.0
+    // ships npm 10.5.1, inside the failing band.
+    for (const old of ['8.19.4', '9.9.4', '10.2.4', '10.5.0', '10.5.1']) {
+      const run = runInstallWithNpm(old);
+      expect([old, run.status]).not.toEqual([old, 0]);
+      // And it must not have installed anything with a client it cannot use.
+      expect([old, run.record.includes('argv=install')]).toEqual([old, false]);
+    }
+  });
+
+  it('accepts the first npm that actually verifies, and newer', () => {
+    // The floor must not be too high either: 10.6.0 is the first version
+    // measured to pass, so refusing it would break consumers for nothing.
+    for (const ok of ['10.6.0', '10.9.2', '11.0.0']) {
+      expect([ok, runInstallWithNpm(ok).status]).toEqual([ok, 0]);
+    }
+  });
+
+  it('still reads the version when npm prints a notice above it', () => {
+    // The shape that defeated two earlier versions of this floor. A per-line
+    // shape check passed, then the arithmetic read the WHOLE string, errored,
+    // the `if` read false, and the floor was skipped on a client it exists to
+    // refuse.
+    const old = runInstallWithNpm('npm notice a new version is available\\n10.5.0');
+    expect(old.status).not.toBe(0);
+    expect(old.record.includes('argv=install')).toBe(false);
+
+    // The same shape must not refuse a client that is fine.
+    expect(runInstallWithNpm('npm notice a new version is available\\n10.9.2').status).toBe(0);
+  });
+
+  it('refuses rather than assumes when it cannot read a version at all', () => {
+    // A guard that fails open when it cannot see is not a guard.
+    for (const unreadable of ['', 'not a version']) {
+      const run = runInstallWithNpm(unreadable);
+      expect([unreadable, run.status]).not.toEqual([unreadable, 0]);
+      expect([unreadable, run.record.includes('argv=install')]).toEqual([unreadable, false]);
+    }
   });
 
   it('never lets an installed package run its own install scripts', () => {

@@ -397,12 +397,21 @@ describe('action.yml text guards', () => {
     // both, and nothing about what a real npm does when asked. These two lines
     // are the ask.
     const install = action.extractRunScript(INSTALL_STEP);
-    const installAt = install.indexOf('npm install -g');
-    const auditAt = install.indexOf('npm audit signatures');
+    // COMMENTS STRIPPED FIRST. The ordering claim is about the CODE, and this
+    // step now explains at length why the verification exists, naming the
+    // command well above the line that runs it. Matching raw text made the
+    // explanation look like an earlier invocation and turned the file red for
+    // documenting itself, which is how an explanation gets deleted.
+    const code = install
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('#'))
+      .join('\n');
+    const installAt = code.indexOf('npm install -g');
+    const auditAt = code.indexOf('npm audit signatures');
     expect([installAt, auditAt].every((i) => i !== -1)).toBe(true);
     expect(auditAt).toBeGreaterThan(installAt);
     // No install anywhere in the step that skips the flag.
-    for (const line of install.split('\n')) {
+    for (const line of code.split('\n')) {
       if (line.trim().startsWith('npm install')) {
         expect([line, line.includes('--ignore-scripts')]).toEqual([line, true]);
       }
