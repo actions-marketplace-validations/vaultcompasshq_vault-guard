@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **A whole-tree or target scan that examines zero files now exits 2
+  (could-not-run) instead of reporting a clean pass.** A plain `vault-guard
+  scan <path>` and a `--trust-base` (pull-request mode) scan both walk a
+  directory that is expected to hold content; if that walk resolves to no
+  files at all, the run has established nothing about the tree, and "No
+  secrets found" over nothing is a worse signal than no gate at all. Found in
+  the wild: a check script whose scan root resolved relative to its own
+  (relocated) location, rather than to the repository, scanned zero files
+  and sat green in a required check for two days before anyone noticed.
+  This guard catches the zero-file case specifically; a mis-resolved root
+  that still holds a stray scannable file (a README, a LICENSE) is not
+  caught here, so running the Action at the repository root, and its own
+  root canonicalization, remain the primary protection.
+
+  `--staged` is unaffected: an empty git index is an explicit empty scope
+  (the caller asked for "what's staged" and got a true "nothing"), and stays
+  a clean exit 0, same as before.
+
+  This also closes a second, narrower form of the config-mutation muting that
+  pull-request mode (`--trust-base`) already defends against: a config that
+  ignores literally everything (`"ignore": {"paths": ["**"]}}`) now makes an
+  ordinary local scan hit this same could-not-run, rather than silently
+  reporting clean, even without `--trust-base`.
+
 ## [1.7.4] - 2026-09-18
 
 **An action-only release. The tag moves; the npm packages do not.** Nothing in

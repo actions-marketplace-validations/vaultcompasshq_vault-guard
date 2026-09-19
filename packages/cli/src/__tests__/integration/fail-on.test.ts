@@ -182,7 +182,16 @@ describe('CLI --fail-on gate', () => {
     });
 
     it('stays quiet when there are no findings at all', () => {
-      fs.rmSync(path.join(workdir, 'docs'), { recursive: true });
+      // Overwritten rather than removed: an empty `workdir` (zero files
+      // examined) now exits 2 under the fail-closed empty-scan invariant
+      // (see empty-scan-fail-closed.test.ts), which would make this test
+      // assert something the code no longer does for an unrelated reason.
+      // One clean file keeps "no findings" true while keeping the scan
+      // non-empty.
+      fs.writeFileSync(
+        path.join(workdir, 'docs', 'setup.md'),
+        '# Setup\n\nNothing sensitive here.\n',
+      );
       const proc = run(['scan', '.']);
       expect(proc.status).toBe(0);
       expect(proc.stderr).not.toMatch(/1\.4\.0/);

@@ -46,9 +46,10 @@ export type OutputFormat = 'text' | 'json' | 'sarif';
 /**
  * Exit 2 is "vault-guard cannot vouch for this result". The staged path already
  * uses it for a file it could not read and for a git failure; pull-request mode
- * uses it for a base ref it could not read control inputs from. In every case
- * nothing about the tree was established, so exit 1 ("scanned fine, found
- * something") would be a claim the run did not earn.
+ * uses it for a base ref it could not read control inputs from; a whole-tree /
+ * target scan (plain or --trust-base) uses it for a walk that examined zero
+ * files. In every case nothing about the tree was established, so exit 1
+ * ("scanned fine, found something") would be a claim the run did not earn.
  */
 const COULD_NOT_RUN_EXIT = 2;
 
@@ -336,6 +337,44 @@ export async function scanCommand(
           ? { pullRequest: { headTreeFiles: controls.headTreeFiles, skipped: prSkips } }
           : {}),
       });
+    }
+
+    // A whole-tree / target scan (plain or --trust-base) that examined ZERO
+    // files established nothing about the tree, and "No secrets found" over
+    // nothing is a worse signal than no gate at all: it is a green check a
+    // reviewer reads as "this was looked at". Found in the wild as a check
+    // script whose scan root resolved relative to its own (relocated) path
+    // rather than the repository -- it scanned zero files and sat green in a
+    // required check for two days before anyone noticed. action.yml's
+    // `pwd -P` SCAN_ROOT handling addresses the wrong-root case one layer
+    // out; this CLI check is a backstop for the ZERO-FILE subset of it. A
+    // wrong root that still holds a stray scannable file examines one file
+    // and scans green, so running at the repository root remains the real
+    // fix; this only refuses the empty case.
+    //
+    // `--staged` is deliberately EXCLUDED. Its file list is declared by the
+    // caller (the git index) rather than discovered by a walk, so an empty
+    // index is the caller explicitly asking "what's staged" and getting a
+    // true "nothing" -- an IMPOSED empty scope, not a DISCOVERED one, and it
+    // must stay a clean pass. That case already returns 0 above (text mode)
+    // or falls through this same function to a 0 (json/sarif), and both are
+    // pinned by empty-scan-fail-closed.test.ts's "explicit empty scope"
+    // block.
+    //
+    // Counting `stats.filesScanned` rather than `results.length` matters:
+    // `results` holds only files WITH findings, so a clean scan of 500 files
+    // has `results.length === 0` and must stay exit 0. `filesScanned` counts
+    // every file actually opened and scanned, findings or not.
+    if (!staged && stats.filesScanned === 0) {
+      console.error(
+        chalk.red('❌ Cannot establish a result:'),
+        chalk.white(
+          'vault-guard: nothing was scanned. The scan target resolved to no ' +
+            'files; in CI this is a could-not-run, not a clean pass. Check ' +
+            'that the action runs at the repository root.',
+        ),
+      );
+      return COULD_NOT_RUN_EXIT;
     }
 
     // Merge bus diagnostics
