@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the wild: a check script whose scan root resolved relative to its own
   (relocated) location, rather than to the repository, scanned zero files
   and sat green in a required check for two days before anyone noticed.
+  This guard catches the zero-file case specifically; a mis-resolved root
+  that still holds a stray scannable file (a README, a LICENSE) is not
+  caught here, so running the Action at the repository root, and its own
+  root canonicalization, remain the primary protection.
 
   `--staged` is unaffected: an empty git index is an explicit empty scope
   (the caller asked for "what's staged" and got a true "nothing"), and stays

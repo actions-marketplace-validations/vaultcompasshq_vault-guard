@@ -345,9 +345,12 @@ export async function scanCommand(
     // reviewer reads as "this was looked at". Found in the wild as a check
     // script whose scan root resolved relative to its own (relocated) path
     // rather than the repository -- it scanned zero files and sat green in a
-    // required check for two days before anyone noticed. See action.yml's
-    // `pwd -P` SCAN_ROOT handling for the same failure one layer out; this
-    // closes it here too, for anyone driving vault-guard directly.
+    // required check for two days before anyone noticed. action.yml's
+    // `pwd -P` SCAN_ROOT handling addresses the wrong-root case one layer
+    // out; this CLI check is a backstop for the ZERO-FILE subset of it. A
+    // wrong root that still holds a stray scannable file examines one file
+    // and scans green, so running at the repository root remains the real
+    // fix; this only refuses the empty case.
     //
     // `--staged` is deliberately EXCLUDED. Its file list is declared by the
     // caller (the git index) rather than discovered by a walk, so an empty
