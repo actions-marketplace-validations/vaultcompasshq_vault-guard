@@ -237,6 +237,81 @@ runs:
           exit 1
         fi
 
+        # A SECOND FLOOR, ON ONE EVENT ONLY: on a pull request, `version` may
+        # not name a scanner OLDER than the one this action tag ships with.
+        #
+        # THE HOLE. On a same-repo `pull_request` event GitHub runs the workflow
+        # file from the HEAD, so the `version:` input is written by the pull
+        # request being judged. The floor above admits anything at or above
+        # 1.7.0, which shuts this by coincidence rather than by design: exactly
+        # one published version satisfies it today. The day a 1.8.0 scanner
+        # ships with new rules, a pull request pins 1.7.0, clears that floor,
+        # and is judged by the older rule set it chose for itself.
+        #
+        # This is the same class of hole as `trust-base: off`, refused by name a
+        # few lines below for exactly this reason. The difference is what a
+        # reviewer sees: deleting a security step reads as deleting a security
+        # step, while `version: 1.7.0` reads as ordinary version management.
+        #
+        # FORWARD STAYS ALLOWED. A newer scanner is not a weaker one, and the
+        # `version` input exists so a consumer can pin one. Only the backward
+        # direction, on the one event where the workflow file is written by the
+        # side under judgment, is refused.
+        #
+        # A SEPARATE CONSTANT FROM VG_MIN_*, and they are the same number today.
+        # They mean different things. VG_MIN_* is FLAG COMPATIBILITY: the oldest
+        # scanner that understands the arguments this tag passes, raised in the
+        # commit that starts passing a newer flag. VG_TAG_SCANNER is THE TESTED
+        # SCANNER THIS TAG SHIPS, which moves with the published packages. One
+        # constant serving both is how raising one silently raises the other.
+        #
+        # COMPARED AGAINST THE HARDCODED CONSTANT, never against anything
+        # derived from an input. `inputs.version` looks identical whether the
+        # consumer wrote 1.7.0 or the default supplied it, so the step cannot
+        # tell a pin from a default and the constant is the only source of
+        # truth. It is safe to trust because action.yml comes from the ref the
+        # consumer's workflow names, not from the pull request's tree.
+        VG_TAG_SCANNER_MAJOR=1
+        VG_TAG_SCANNER_MINOR=7
+        VG_TAG_SCANNER_PATCH=0
+        VG_TAG_SCANNER="${VG_TAG_SCANNER_MAJOR}.${VG_TAG_SCANNER_MINOR}.${VG_TAG_SCANNER_PATCH}"
+
+        # GITHUB_BASE_REF being non-empty IS the pull-request test, and it is the
+        # same one the run step uses to decide whether to pass `--trust-base`
+        # under `auto`. A second detector for the same event is a second thing to
+        # keep in step.
+        if [[ -n "${GITHUB_BASE_REF:-}" ]]; then
+          # WRITTEN AS "ACCEPT ONLY IF PROVABLY NEW ENOUGH", NOT "REFUSE IF OLD".
+          #
+          # `[` returns 2 on a malformed comparison, and an `if` reads 2 as
+          # false, so a refuse-if shape turns an arithmetic error into
+          # permission -- on the one check whose whole job is to refuse. Here an
+          # error leaves the flag at 0 and the step refuses, so the failure
+          # direction is closed by construction rather than by getting every
+          # expression right.
+          #
+          # Component by component, never as text: `1.10.0` sorts BELOW `1.7.0`
+          # as a string and above it as a version, and a lexicographic check
+          # would refuse the forward pin this rule deliberately leaves open.
+          VG_PR_SCANNER_OK=0
+          if [ "${VG_MAJOR}" -gt "${VG_TAG_SCANNER_MAJOR}" ] 2>/dev/null; then
+            VG_PR_SCANNER_OK=1
+          elif [ "${VG_MAJOR}" -eq "${VG_TAG_SCANNER_MAJOR}" ] 2>/dev/null; then
+            if [ "${VG_MINOR}" -gt "${VG_TAG_SCANNER_MINOR}" ] 2>/dev/null; then
+              VG_PR_SCANNER_OK=1
+            elif [ "${VG_MINOR}" -eq "${VG_TAG_SCANNER_MINOR}" ] 2>/dev/null && [ "${VG_PATCH}" -ge "${VG_TAG_SCANNER_PATCH}" ] 2>/dev/null; then
+              VG_PR_SCANNER_OK=1
+            fi
+          fi
+
+          if [ "${VG_PR_SCANNER_OK}" -ne 1 ]; then
+            printf '::error::vault-guard: on a pull request the `version` input may not ask for a scanner older than the one this action tag ships. It asks for %s, and this tag ships %s.\n' "${VG_VERSION}" "${VG_TAG_SCANNER}"
+            printf '::error::On a same-repo pull_request event GitHub runs the workflow file from the pull request head, so on this event the workflow file belongs to the pull request. An older scanner here would let a change choose the rules it is judged by.\n'
+            printf '::error::REMOVE the `version` input and this cannot happen: the default is the scanner this action tag ships. Pinning FORWARD is still accepted on a pull request, because a newer scanner is not a weaker one.\n'
+            exit 1
+          fi
+        fi
+
         # `off` was accepted before 1.7.0 shipped and is refused by name, so a
         # workflow carrying it gets told what happened rather than a confusing
         # "ref does not resolve" from a scan that tried to use `off` as a branch

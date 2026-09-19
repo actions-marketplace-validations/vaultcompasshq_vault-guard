@@ -69,16 +69,19 @@ const DEFAULT_INPUTS: Record<string, string> = {
   'trust-base': 'auto',
 };
 
+const VALIDATE_STEP = 'Validate inputs';
+
 // The variables come from the step's own `env:` mapping in action.yml, never
 // from a table written here: a harness that injects a variable the step does not
 // declare is testing a program that does not exist.
-function runValidateWith(
+function runValidateScript(
+  script: string,
   inputs: Record<string, string>,
   extraEnv: Record<string, string> = {},
 ): { status: number; stdout: string } {
   const dir = mkdtempSync(path.join(tmpdir(), 'vault-guard-action-validate-'));
   const scriptFile = path.join(dir, 'validate.sh');
-  writeFileSync(scriptFile, action.extractRunScript('Validate inputs'));
+  writeFileSync(scriptFile, script);
   const ctx: StepContext = {
     inputs: { ...DEFAULT_INPUTS, ...inputs },
     runnerTemp: dir,
@@ -90,7 +93,7 @@ function runValidateWith(
       stdio: ['ignore', 'pipe', 'pipe'],
       env: {
         PATH: process.env.PATH ?? '',
-        ...action.evaluateStepEnv('Validate inputs', ctx),
+        ...action.evaluateStepEnv(VALIDATE_STEP, ctx),
         ...extraEnv,
       },
     });
@@ -99,6 +102,13 @@ function runValidateWith(
     const e = err as { status?: number; stdout?: string };
     return { status: typeof e.status === 'number' ? e.status : -1, stdout: e.stdout ?? '' };
   }
+}
+
+function runValidateWith(
+  inputs: Record<string, string>,
+  extraEnv: Record<string, string> = {},
+): { status: number; stdout: string } {
+  return runValidateScript(action.extractRunScript(VALIDATE_STEP), inputs, extraEnv);
 }
 
 describe('action.yml "Validate inputs", version', () => {
@@ -200,6 +210,167 @@ describe('action.yml "Validate inputs", version', () => {
       defaultVersion,
       0,
     ]);
+  });
+});
+
+// The three numbers VG_TAG_SCANNER is built from, read out of action.yml rather
+// than written down here: a copy in this file would go on agreeing with itself
+// after the action moved.
+function tagScannerPart(part: 'MAJOR' | 'MINOR' | 'PATCH'): string {
+  const found = new RegExp(`VG_TAG_SCANNER_${part}=([0-9]+)`).exec(actionYml);
+  expect([part, found === null]).toEqual([part, false]);
+  return (found as RegExpExecArray)[1];
+}
+
+// The same step, with the tag's scanner constant advanced by one minor version:
+// the action as it will be the day a 1.8.0 scanner ships and this tag starts
+// shipping it.
+//
+// This exists because TODAY the flag floor and the tag scanner are the same
+// number, so no real input value lands between them and the pull-request rule
+// has no visible effect on the shipped file. Driving the real step text with a
+// future constant is the only way to exercise the comparison itself now, and it
+// is not a weakened program: every line of the check is the shipped one. The
+// replacement is asserted to have MATCHED, so deleting or renaming the constant
+// turns this red rather than silently testing the unmodified script.
+function scriptWithFutureTagScanner(): string {
+  const script = action.extractRunScript(VALIDATE_STEP);
+  const future = script.replace(
+    /VG_TAG_SCANNER_MINOR=([0-9]+)/,
+    (_all, digits: string) => `VG_TAG_SCANNER_MINOR=${Number(digits) + 1}`,
+  );
+  expect(future).not.toBe(script);
+  return future;
+}
+
+describe('action.yml "Validate inputs", pinning the scanner backward on a pull request', () => {
+  it('refuses a pull request that asks for an older scanner than the tag ships', () => {
+    // THE HOLE THIS CLOSES. On a same-repo `pull_request` event GitHub runs the
+    // workflow file from the HEAD, so the `version:` input is written by the
+    // pull request being judged. The flag floor admits anything at or above
+    // 1.7.0, so once a newer scanner exists a pull request can pin back to an
+    // older one, clear the floor, and be judged by weaker rules. `trust-base:
+    // off` was removed for exactly this reason; the difference is that deleting
+    // a security step reads as deleting a security step, while `version: 1.7.0`
+    // reads as ordinary version management.
+    const future = scriptWithFutureTagScanner();
+    const run = runValidateScript(future, { version: '1.7.0' }, { GITHUB_BASE_REF: 'main' });
+    expect(run.status).not.toBe(0);
+    // BOTH numbers, for the same reason the flag floor names both: a refusal
+    // that does not say which two values disagree sends the reader away to
+    // work it out.
+    expect(run.stdout).toContain('1.7.0');
+    expect(run.stdout).toContain('1.8.0');
+    expect(run.stdout).toContain('pull request');
+    // And the remedy, which is to stop pinning at all.
+    expect(run.stdout).toContain('REMOVE the `version` input');
+  });
+
+  it('leaves push events alone, where the workflow file is not the pull request', () => {
+    // The event test is GITHUB_BASE_REF being non-empty, which is exactly how
+    // the run step decides to pass `--trust-base` under `auto`. With it unset
+    // the same low pin is accepted: on a push the workflow file is already in
+    // the protected branch, so pinning back there is version management rather
+    // than a bypass, and the flag floor remains the only version gate.
+    const future = scriptWithFutureTagScanner();
+    expect(runValidateScript(future, { version: '1.7.0' }, {}).status).toBe(0);
+    expect(runValidateScript(future, { version: '1.7.1' }, {}).status).toBe(0);
+  });
+
+  it('allows pinning forward on a pull request, and orders numerically', () => {
+    // A newer scanner is not a weaker one, so pinning FORWARD stays allowed.
+    // `1.10.0` is the case a lexicographic comparison gets wrong: it sorts
+    // below `1.8.0` as text and above it as a version, and refusing it would
+    // refuse the very direction this rule exists to leave open.
+    const future = scriptWithFutureTagScanner();
+    for (const ok of ['1.8.0', '1.8.1', '1.9.0', '1.10.0', '2.0.0', '10.0.0']) {
+      expect([
+        ok,
+        runValidateScript(future, { version: ok }, { GITHUB_BASE_REF: 'main' }).status,
+      ]).toEqual([ok, 0]);
+    }
+  });
+
+  it('accepts the scanner this tag actually ships, on every event', () => {
+    // Against the REAL file, not the future one: the shipped default and the
+    // shipped tag scanner have to pass on a pull-request run, or every
+    // consumer's pull request goes red the day this lands.
+    const shipped = `${tagScannerPart('MAJOR')}.${tagScannerPart('MINOR')}.${tagScannerPart('PATCH')}`;
+    expect(runValidateWith({ version: shipped }, { GITHUB_BASE_REF: 'main' }).status).toBe(0);
+    expect(runValidateWith({}, { GITHUB_BASE_REF: 'main' }).status).toBe(0);
+    for (const ok of ['1.7.1', '1.8.0', '1.10.0', '2.0.0']) {
+      expect([ok, runValidateWith({ version: ok }, { GITHUB_BASE_REF: 'main' }).status]).toEqual([
+        ok,
+        0,
+      ]);
+    }
+  });
+
+  it('lets the flag floor answer first for a version below it', () => {
+    // Two separate checks, deliberately, and the order decides which message a
+    // reader gets. 1.6.9 is below BOTH, and the useful answer names
+    // `--trust-base`: that pin does not merely choose weaker rules, it cannot
+    // run at all. Reversing the order would answer a broken pin with a lecture
+    // about pull requests.
+    const run = runValidateWith({ version: '1.6.9' }, { GITHUB_BASE_REF: 'main' });
+    expect(run.status).not.toBe(0);
+    expect(run.stdout).toContain('--trust-base');
+    expect(run.stdout).not.toContain('judged by');
+  });
+
+  it('keeps the tag scanner, the input default and the published package one number', () => {
+    // THE DRIFT GUARD, and the most important case here. Three numbers in three
+    // files have to say the same thing: the scanner this repository publishes,
+    // the `version` input's default, and the constant the pull-request rule
+    // compares against. Let them drift and the rule silently measures against a
+    // scanner nobody ships -- a constant left BEHIND a published scanner would
+    // go on admitting the pin it exists to refuse, and would do it quietly.
+    const cliVersion = JSON.parse(
+      readFileSync(path.join(REPO_ROOT, 'packages', 'cli', 'package.json'), 'utf-8'),
+    ).version;
+    const tagScanner = `${tagScannerPart('MAJOR')}.${tagScannerPart('MINOR')}.${tagScannerPart('PATCH')}`;
+    expect(tagScanner).toBe(cliVersion);
+    const defaultAt = /default:\s*(\S+)\s*\n\s*path:/.exec(actionYml);
+    expect(defaultAt).not.toBeNull();
+    expect((defaultAt as RegExpExecArray)[1]).toBe(tagScanner);
+  });
+
+  it('keeps the tag scanner a separate constant from the flag floor', () => {
+    // They are the same number today and mean different things: the floor is
+    // FLAG COMPATIBILITY (the oldest scanner that understands what this tag
+    // passes) and the tag scanner is THE TESTED SCANNER THIS TAG SHIPS. One
+    // constant serving both is how raising one silently raises the other.
+    for (const part of ['MAJOR', 'MINOR', 'PATCH']) {
+      expect([part, actionYml.includes(`VG_MIN_${part}=`)]).toEqual([part, true]);
+      expect([part, actionYml.includes(`VG_TAG_SCANNER_${part}=`)]).toEqual([part, true]);
+    }
+  });
+
+  it('writes the pull-request check accept-only-if, after the flag floor', () => {
+    // Stated as text because behaviour cannot see a check that is not there,
+    // and because the FAILURE DIRECTION is the point. `[` returns 2 on a
+    // malformed comparison and an `if` reads 2 as false, so a refuse-if shape
+    // turns an arithmetic error into permission. The flag must therefore start
+    // at 0 and only be raised by a comparison that succeeded.
+    const code = action
+      .extractRunScript(VALIDATE_STEP)
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('#'))
+      .join('\n');
+    const initAt = code.indexOf('VG_PR_SCANNER_OK=0');
+    const refuseAt = code.indexOf('"${VG_PR_SCANNER_OK}" -ne 1');
+    const floorAt = code.indexOf('VG_TOO_OLD == 1');
+    expect([initAt, refuseAt, floorAt].every((i) => i !== -1)).toBe(true);
+    expect(initAt).toBeGreaterThan(floorAt);
+    expect(refuseAt).toBeGreaterThan(initAt);
+    // The event test is the one the run step already uses for `--trust-base`
+    // under `auto`, not a second detector invented here, and it wraps the new
+    // check rather than sitting somewhere else in the step. Searched from the
+    // flag floor onwards, because the same idiom appears earlier for a
+    // different purpose.
+    const gateAt = code.indexOf('-n "${GITHUB_BASE_REF:-}"', floorAt);
+    expect(gateAt).toBeGreaterThan(floorAt);
+    expect(gateAt).toBeLessThan(initAt);
   });
 });
 

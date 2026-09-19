@@ -190,6 +190,150 @@ assert_version_bad "-1.7.0"
 assert_version_bad "01.7.0"
 assert_version_bad "1.7.00"
 
+# --- pinning the scanner backward on a pull request --------------------------
+#
+# THE THIRD half of the contract, and a different rule from the floor above. On
+# a same-repo `pull_request` event GitHub runs the workflow file from the HEAD,
+# so `version:` is written by the pull request being judged. The floor admits
+# anything at or above 1.7.0, so the day a newer scanner ships with new rules, a
+# pull request can pin back to an older one, clear the floor, and be judged by
+# the rules it chose. On that one event the action refuses a version BELOW the
+# scanner the tag ships. Forward stays allowed: a newer scanner is not a weaker
+# one.
+#
+# TAG_SCANNER is a SEPARATE constant from MIN_* on purpose, in this file as in
+# action.yml. Same number today, different meanings: MIN_* is flag
+# compatibility, TAG_SCANNER is the tested scanner this tag ships.
+TAG_SCANNER_MAJOR=1
+TAG_SCANNER_MINOR=7
+TAG_SCANNER_PATCH=0
+
+# Guard: every constant copied into this file still equals the one in
+# action.yml. This is the direct answer to the hazard named above -- a copy that
+# drifts asserts the opposite of the shipped action and stays green while it does
+# it, which has already happened here once.
+assert_action_constant() {
+  local name="$1"
+  local expected="$2"
+  local found
+  found="$(grep -oE "^[[:space:]]*${name}=[0-9]+" "${ACTION_YML}" | head -n 1 | grep -oE '[0-9]+$' || true)"
+  if [[ "${found}" != "${expected}" ]]; then
+    printf 'action.yml has %s=%s and this file has %s; the hand copy has drifted\n' \
+      "${name}" "${found:-<missing>}" "${expected}" >&2
+    exit 1
+  fi
+}
+
+assert_action_constant "VG_MIN_MAJOR" "${MIN_MAJOR}"
+assert_action_constant "VG_MIN_MINOR" "${MIN_MINOR}"
+assert_action_constant "VG_MIN_PATCH" "${MIN_PATCH}"
+assert_action_constant "VG_TAG_SCANNER_MAJOR" "${TAG_SCANNER_MAJOR}"
+assert_action_constant "VG_TAG_SCANNER_MINOR" "${TAG_SCANNER_MINOR}"
+assert_action_constant "VG_TAG_SCANNER_PATCH" "${TAG_SCANNER_PATCH}"
+
+# Takes the floor as arguments rather than reading a constant, so the cases
+# below can exercise the comparison against a HYPOTHETICAL future tag scanner.
+# Today the two floors are the same number and no real input lands between them,
+# so a test that only used TAG_SCANNER could not show the rule doing anything.
+#
+# Accept-only-if, like the action: `[` returns 2 on a malformed comparison and
+# an `if` reads 2 as false, so a refuse-if shape turns an arithmetic error into
+# permission.
+version_at_least() {
+  local value="$1"
+  local want_major="$2"
+  local want_minor="$3"
+  local want_patch="$4"
+  if [[ ! "${value}" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+    return 1
+  fi
+  local major="${BASH_REMATCH[1]}"
+  local minor="${BASH_REMATCH[2]}"
+  local patch="${BASH_REMATCH[3]}"
+  local ok=0
+  if (( major > want_major )); then
+    ok=1
+  elif (( major == want_major )); then
+    if (( minor > want_minor )); then
+      ok=1
+    elif (( minor == want_minor )) && (( patch >= want_patch )); then
+      ok=1
+    fi
+  fi
+  (( ok == 1 ))
+}
+
+# What the action does on a pull-request event: the flag floor first, then this.
+validate_version_pull_request() {
+  if ! validate_version "$1"; then
+    return 1
+  fi
+  version_at_least "$1" "${TAG_SCANNER_MAJOR}" "${TAG_SCANNER_MINOR}" "${TAG_SCANNER_PATCH}"
+}
+
+assert_pr_version_ok() {
+  if ! validate_version_pull_request "$1"; then
+    printf 'expected OK on a pull request for version %q\n' "$1" >&2
+    exit 1
+  fi
+}
+
+assert_pr_version_bad() {
+  if validate_version_pull_request "$1"; then
+    printf 'expected reject on a pull request for version %q\n' "$1" >&2
+    exit 1
+  fi
+}
+
+# Forward, and the scanner the tag ships. `1.10.0` is again the case a textual
+# comparison gets wrong, and here it would refuse the one direction this rule
+# deliberately leaves open.
+assert_pr_version_ok "1.7.0"
+assert_pr_version_ok "1.7.1"
+assert_pr_version_ok "1.8.0"
+assert_pr_version_ok "1.10.0"
+assert_pr_version_ok "2.0.0"
+assert_pr_version_ok "10.20.30"
+
+# Backward, and the shapes the first check already refuses.
+assert_pr_version_bad "1.6.9"
+assert_pr_version_bad "1.6.0"
+assert_pr_version_bad "0.9.9"
+assert_pr_version_bad "latest"
+assert_pr_version_bad ""
+
+# The rule with a FUTURE tag scanner, which is the only way to see it act today:
+# with a 1.8.0 scanner shipped, `1.7.0` still clears the flag floor -- so a push
+# takes it -- and is refused on a pull request.
+assert_version_ok "1.7.0"
+if version_at_least "1.7.0" 1 8 0; then
+  printf 'a version below a 1.8.0 tag scanner was accepted on a pull request\n' >&2
+  exit 1
+fi
+if ! version_at_least "1.8.0" 1 8 0; then
+  printf 'the tag scanner itself was refused on a pull request\n' >&2
+  exit 1
+fi
+if ! version_at_least "1.10.0" 1 8 0; then
+  printf 'a pull-request pin ahead of the tag scanner was refused; the comparison is textual\n' >&2
+  exit 1
+fi
+
+# Guard: the action gates this on GITHUB_BASE_REF, which is the same event test
+# the run step uses for `--trust-base`. A rule that fired on every event would
+# break push builds that pin an older scanner on purpose.
+if ! grep -n 'n "${GITHUB_BASE_REF:-}"' "${ACTION_YML}" >/dev/null; then
+  printf 'action.yml no longer tests for a pull-request event with GITHUB_BASE_REF\n' >&2
+  exit 1
+fi
+
+# Guard: accept-only-if, not refuse-if. The flag has to start at 0 so an
+# arithmetic error refuses rather than permits.
+if ! grep -n 'VG_PR_SCANNER_OK=0' "${ACTION_YML}" >/dev/null; then
+  printf 'action.yml no longer starts the pull-request scanner check closed\n' >&2
+  exit 1
+fi
+
 # Guard: the refusal message has to carry the migration, because `latest` used
 # to be the default and every workflow that spelled it out has to change.
 if ! grep -n 'REMOVE the input' "${ACTION_YML}" >/dev/null; then
