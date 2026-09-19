@@ -456,14 +456,31 @@ describe('pull-request mode (--trust-base)', () => {
   });
 
   describe('the before state, pinned', () => {
-    it('without the flag ignore: ["**"] still mutes the key', async () => {
+    /**
+     * Updated by the empty-scan fail-closed invariant (see
+     * empty-scan-fail-closed.test.ts). `ignore: ["**"]` does not merely mute
+     * every finding any more: it makes the walk examine zero files, which is
+     * now its own could-not-run rather than a silent clean pass. This is a
+     * SECOND, independent closure of the same mutation-attack class this
+     * describe block documents, and it applies even without `--trust-base`,
+     * which is why the assertion changed from "still mutes the key" (exit 0)
+     * to "still hits could-not-run" (exit 2) here.
+     *
+     * The other "before state" cases below are untouched: severity_overrides
+     * and a swapped-in .vault-guard.local.json suppress the FINDING without
+     * suppressing every FILE (the fixture's other file, src/app.ts, is still
+     * examined), so they do not trip the zero-files check and still
+     * demonstrate the original silent-clean vulnerability that only
+     * --trust-base closes.
+     */
+    it('without the flag ignore: ["**"] now hits the empty-scan invariant instead of silently muting', async () => {
       seedBase();
       addSecret();
       write('.vault-guard.json', JSON.stringify({ fail_on: 'medium', ignore: { paths: ['**'] } }));
       commit('feature');
       const r = await capture(() => scanCommand('.', 'text'));
-      expect(r.code).toBe(0);
-      expect(r.log).toContain('No secrets found');
+      expect(r.code).toBe(2);
+      expect(r.err).toContain('nothing was scanned');
     });
 
     it('without the flag a severity_overrides off still mutes the key', async () => {
