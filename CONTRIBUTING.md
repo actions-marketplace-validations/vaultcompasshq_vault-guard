@@ -126,3 +126,10 @@ Do not start these without a dedicated plan signed off by the repo owner:
 - `.claude/` `.cursor/` artifact detection rule
 - GitHub Action Marketplace listing
 - TypeScript 6 upgrade
+
+## Findings log
+
+[FINDINGS.md](./FINDINGS.md) is a durable, append-by-PR record of what
+vault-guard actually did when run against real code, including runs that
+caught nothing. Open a PR to append a row after you run it against real
+code, your own or someone else's.
