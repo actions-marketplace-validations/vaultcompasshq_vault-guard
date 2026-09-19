@@ -15,7 +15,7 @@ The composite action in the **repository root** installs the published
 ## The Action tag and the scanner version are two numbers
 
 `vaultcompasshq/vault-guard@v1.7.4` installs
-`@vaultcompass/vault-guard@1.7.0`. 1.7.1, 1.7.2 and 1.7.3 were all action-only
+`@vaultcompass/vault-guard@1.7.0`. 1.7.1 through 1.7.4 were all action-only
 releases: they changed the Action and nothing in the scanner, so there was no
 new scanner to publish.
 Read the tag as "which version of the workflow step", not as "which version of
