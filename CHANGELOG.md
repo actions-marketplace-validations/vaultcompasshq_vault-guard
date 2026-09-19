@@ -44,9 +44,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and a single constant is how raising one silently raises the other.
 
   **What this does not cover:** forks, where the base repository's workflow file
-  runs and there is nothing to pin; and a pull request that deletes the step or
-  moves the `uses:` pin, for which branch protection with required review on
-  `.github/workflows/**` remains the control.
+  runs, so a fork author never writes the `version:` that judges them (the rule
+  still fires on a fork pull request and judges the base workflow's own pin, so
+  a deliberate backward pin there refuses every fork run); and a pull request
+  that deletes the step or moves the `uses:` pin, for which branch protection
+  with required review on `.github/workflows/**` remains the control.
 
 - **The Action no longer runs install scripts, and verifies what it installed.**
   The install step ran `npm install -g` with no `--ignore-scripts`, on a runner
