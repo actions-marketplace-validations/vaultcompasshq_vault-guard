@@ -47,6 +47,47 @@ stay at 1.7.0 on npm, and the Action's `version` default stays `1.7.0`.
 
 ### Security
 
+- **A pull request can no longer pin the Action to an older scanner than the tag
+  ships.** On a same-repo `pull_request` event GitHub runs the workflow file
+  from the head, so the `version:` input is written by the pull request being
+  judged. The existing floor does not close that: it is a FLAG-COMPATIBILITY
+  floor (1.7.0 is when `--trust-base` arrived) and admits everything at or above
+  it. It has been shut by coincidence — exactly one published version satisfies
+  it — rather than by design.
+
+  On pull-request events the step now refuses a `version` below the scanner this
+  Action tag ships, naming both numbers and pointing at the fix, which is to
+  remove the input. Pinning **forward** is still accepted there, on an
+  assumption the rule does not enforce: that a newer scanner is at least as
+  strict. Forward pins are not bounded.
+
+  **Where it fires** is exactly where `GITHUB_BASE_REF` is set, which is
+  `pull_request` and `pull_request_target`. Push runs are out of scope and the
+  flag floor stays their only version gate. That is a scope statement, not a
+  safety argument: a push run on an unprotected feature branch runs that
+  branch's own workflow file, written by the same author, and is as
+  author-controlled as a pull request. It is not covered.
+
+  **This costs consumers nothing today.** The tag scanner equals the only
+  published scanner, `1.7.0`, so every workflow that clears the old floor on a
+  pull request clears this one too, and a workflow with no `version:` input was
+  never affected. It starts costing something the first time two versions exist:
+  after a 1.8.0 scanner ships, a workflow that pins `version: 1.7.0` will fail
+  its own pull-request runs with a message telling it to remove the input, while
+  its push runs keep working.
+
+  The constant it compares against, `VG_TAG_SCANNER_*`, is deliberately separate
+  from the flag floor's `VG_MIN_*` even though both read 1.7.0 today: one is the
+  oldest scanner this tag can drive, the other is the tested scanner it ships,
+  and a single constant is how raising one silently raises the other.
+
+  **What this does not cover:** forks, where the base repository's workflow file
+  runs, so a fork author never writes the `version:` that judges them (the rule
+  still fires on a fork pull request and judges the base workflow's own pin, so
+  a deliberate backward pin there refuses every fork run); and a pull request
+  that deletes the step or moves the `uses:` pin, for which branch protection
+  with required review on `.github/workflows/**` remains the control.
+
 - **The Action no longer runs install scripts, and verifies what it installed.**
   The install step ran `npm install -g` with no `--ignore-scripts`, on a runner
   holding the job's token, so every package in the resolved tree had arbitrary

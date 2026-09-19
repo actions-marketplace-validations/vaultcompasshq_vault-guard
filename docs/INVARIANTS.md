@@ -284,6 +284,85 @@ check would refuse the newer scanner the floor exists to keep.
 include `1.10.0` on the accepted side and `1.6.9` on the refused side, plus a
 case asserting the action never defaults to a version it would itself refuse.
 
+## On a pull request, `version` may not pin BACKWARD
+
+The floor above is flag compatibility, and it is not the control for version
+choice: it admits everything at or above 1.7.0. On a same-repo `pull_request`
+event GitHub runs the workflow file from the HEAD, so `version:` is written by
+the pull request being judged. Once a second version exists, that is a bypass
+with an innocent shape — deleting a security step reads as deleting a security
+step, while `version: 1.7.0` reads as version management.
+
+So on a pull-request event the step refuses a version BELOW the scanner this
+action tag ships, and accepts anything at or above it. Pinning FORWARD stays
+allowed, which is the direction the input exists for. That rests on an
+ASSUMPTION the rule does not enforce: that a newer scanner is at least as
+strict. Nothing bounds a forward pin, so a version ahead of the tag scanner is
+accepted whatever its rules turn out to be.
+
+Four properties, each load-bearing:
+
+- `VG_TAG_SCANNER_*` is a SEPARATE constant from `VG_MIN_*`. They hold the same
+  number today and mean different things: the floor is the oldest scanner that
+  understands this tag's flags, this is the tested scanner the tag ships. One
+  constant serving both is how raising one silently raises the other.
+- The comparison is against that hardcoded constant, never against anything
+  derived from an input. `inputs.version` looks identical whether a consumer
+  pinned the current version or the default supplied it, so the step cannot tell
+  a pin from a default; the constant is the only source of truth. It is
+  trustworthy because `action.yml` comes from the ref the consumer's workflow
+  names, not from the pull request's tree.
+- The event test is `GITHUB_BASE_REF` being non-empty, the same one the run step
+  uses to decide whether to pass `--trust-base` under `auto`, rather than a
+  second detector to keep in step. It rests on a PLATFORM GUARANTEE worth
+  recording, because a same-repo pull request's author writes the workflow file
+  and the obvious bypass is therefore `env: GITHUB_BASE_REF: ""` at job level:
+  GitHub documents that the default `GITHUB_*` and `RUNNER_*` variables cannot
+  be overwritten and that such an assignment is ignored
+  (https://docs.github.com/en/actions/reference/workflows-and-actions/variables).
+- Written accept-only-if, not refuse-if, for the same reason as the npm floor:
+  `[` returns 2 on a malformed comparison and an `if` reads 2 as false, so a
+  refuse-if shape turns an arithmetic error into permission.
+
+**What this does NOT cover, stated because the obvious summary is wider than the
+rule.** It closes pinning backward on a SAME-REPO pull request, and nothing
+else.
+
+- Not forks, and on forks the rule costs something rather than merely doing
+  nothing. A fork's `pull_request` run uses the BASE repository's workflow file,
+  so a fork author never writes the `version:` that judges them and there is no
+  hole there to close. But `GITHUB_BASE_REF` IS set on a fork pull request, so
+  the check fires anyway and judges the base repository's own trusted workflow
+  file. Once a newer scanner ships, a maintainer's deliberate backward pin in
+  that base workflow fails EVERY fork pull-request run: a pure false refusal, on
+  a pin nobody untrusted wrote. The remedy is the same as for any consumer,
+  which is to remove the `version:` input.
+- Not a pull request that deletes the step, moves the `uses:` pin to an older
+  action tag, or edits the job away. Those are workflow-file edits, and the
+  control is branch protection with required review on `.github/workflows/**`.
+  Nothing in `action.yml` can substitute for it.
+- Not push events. The rule fires exactly where `GITHUB_BASE_REF` is set, which
+  is `pull_request` and `pull_request_target`; push runs are out of scope and
+  the flag floor remains their only version gate. Read that as scope, not as
+  safety: a push to an UNPROTECTED feature branch runs that branch's own
+  workflow file, written by the same author, with `GITHUB_BASE_REF` empty, so it
+  is as author-controlled as a pull request and the rule does not cover it.
+- It costs consumers nothing today, because the tag scanner equals the only
+  published version. It starts costing something the first time two versions
+  exist.
+
+**Enforced by:** the `pinning the scanner backward on a pull request` cases in
+`action-path-validation.test.ts`. Because the two floors are the same number
+today, no real input lands between them, so the behavioural cases drive the real
+step text with the tag-scanner constant advanced one minor version — the action
+as it will be the day a 1.8.0 scanner ships — and assert the replacement matched,
+so deleting the constant turns them red. Plus a drift case tying
+`VG_TAG_SCANNER_*`, the `version` input's default and
+`packages/cli/package.json` to one number, a case proving the flag floor answers
+first for a version below BOTH, and the bash 3.2 mirror in
+`scripts/test-action-path-validation.sh`, which also asserts every constant it
+hand-copied still equals the one in `action.yml`.
+
 ## The Action tag and the scanner version are two numbers, and both get bumped
 
 1.7.1 is the first release where they came apart: the tag moved, the four npm
@@ -297,6 +376,13 @@ next to it pins the other.
 or the other, as of 1.7.1:
 
 - `action.yml`, the `version` input's `default:` — the SCANNER version
+- `action.yml`, `VG_TAG_SCANNER_MAJOR/MINOR/PATCH` — the SCANNER version again,
+  as the constant the pull-request rule above compares against. It moves with
+  the published packages, unlike `VG_MIN_*` next to it, which moves only when
+  this tag starts passing a newer flag
+- `scripts/test-action-path-validation.sh`, `TAG_SCANNER_*` and `MIN_*` — the
+  bash 3.2 hand copy of both, which that script now checks against `action.yml`
+  rather than trusting
 - `action.yml`, the `version` input's description, which names an example
 - `packages/*/package.json` (four packages) — the scanner version
 - `docs/GITHUB_ACTION.md`, the inputs table's `version` default — the scanner

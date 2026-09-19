@@ -92,7 +92,7 @@ judge.
 
 | Input           | Default                     | Description |
 |----------------|-----------------------------|-------------|
-| `version`      | `1.7.0`                     | **Exact** version of `@vaultcompass/vault-guard`, validated against `^(0\|[1-9][0-9]*)\.(0\|[1-9][0-9]*)\.(0\|[1-9][0-9]*)$`. A dist-tag (`latest`, `next`, `beta`), a range, a prerelease, or a leading zero is refused, and so is anything below **1.7.0**, the oldest scanner this Action tag can drive. The default is the scanner this Action tag shipped with; leaving the input out is the recommended shape. |
+| `version`      | `1.7.0`                     | **Exact** version of `@vaultcompass/vault-guard`, validated against `^(0\|[1-9][0-9]*)\.(0\|[1-9][0-9]*)\.(0\|[1-9][0-9]*)$`. A dist-tag (`latest`, `next`, `beta`), a range, a prerelease, or a leading zero is refused, and so is anything below **1.7.0**, the oldest scanner this Action tag can drive. **On a pull request it may not go below the scanner this Action tag ships** (`1.7.0` today); pinning forward is still allowed there. The default is the scanner this Action tag shipped with; leaving the input out is the recommended shape. |
 | `path`         | `.`                         | Subdirectory to scan, relative to workspace root. Must not begin with `-`, contain `..`, or resolve outside the workspace through a symlink. |
 | `format`       | `sarif`                     | `sarif`, `json`, or `text`. |
 | `sarif-output` | `vault-guard-results.sarif` | Output file path **under** `GITHUB_WORKSPACE`. May not resolve under `.github/`, and may not resolve through a symlink at the file or at any directory on the way to it. |
@@ -127,6 +127,49 @@ This is the shape that produced the bug: a repository whose workflow pinned
 carrying secrets, from a scan that stopped at argument parsing. **Remove the
 input.** A `version:` Dependabot does not move is a second pin in a place no
 automation looks.
+
+### On a pull request, `version` may not pin backward
+
+The floor above is about flag compatibility, so it admits everything at or above
+1.7.0 — it is not the control for which scanner judges a pull request. On a
+same-repo `pull_request` event GitHub runs the workflow file from the head, so
+`version:` is written by the pull request being judged. Today exactly one
+published version clears the floor, so nothing can be chosen; the day a 1.8.0
+scanner ships with new rules, `version: 1.7.0` clears the floor and the change
+is judged by the older rules it picked for itself. That reads like version
+management in a diff, which is what makes it worse than deleting the step
+outright.
+
+**So on a pull-request event the Action refuses a `version` below the scanner
+the tag ships, and accepts anything at or above it.** Pinning forward is still
+allowed there, on an assumption the rule does not enforce: that a newer scanner
+is at least as strict. Nothing bounds a forward pin. The comparison is against a
+constant in `action.yml`, which comes from the ref your workflow's `uses:` names
+rather than from the pull request's tree.
+
+The rule fires exactly where `GITHUB_BASE_REF` is set, which is `pull_request`
+and `pull_request_target`. Push runs are out of scope, and the flag floor stays
+their only version gate. That is a statement of scope, not a safety argument: a
+push to an unprotected branch runs that branch's own workflow file, written by
+the same author, so it is as author-controlled as a pull request and is not
+covered.
+
+The refusal names both numbers and the fix, which is to **remove the `version`
+input**.
+
+**What it does not cover, and what it costs on forks.** A fork's `pull_request`
+run uses the base repository's workflow file, so a fork author never writes the
+`version:` that judges them and there is no hole there to close. The rule still
+fires on that run: `GITHUB_BASE_REF` is set on a fork pull request too, so the
+check runs and judges your own trusted workflow file. Once a newer scanner
+exists, a backward pin you deliberately wrote in the base workflow will fail
+every fork pull request, which is a refusal on a pin nobody untrusted wrote. If
+you need that pin, remove the `version:` input or raise it.
+
+It also does not stop a pull request deleting the step, or moving the `uses:`
+pin to an older Action tag. Those are workflow-file edits, and the control is
+branch protection with required review on `.github/workflows/**`. See
+[GITHUB_BRANCH_PROTECTION.md](./GITHUB_BRANCH_PROTECTION.md).
 
 ## Pull requests
 
