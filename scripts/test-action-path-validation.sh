@@ -220,8 +220,21 @@ if ! grep -n 'name: Install vault-guard outside the workspace' "${ACTION_YML}" >
   printf 'action.yml has no install step; the scanner would come from inside the tree it scans\n' >&2
   exit 1
 fi
-if ! grep -n 'npm install -g "@vaultcompass/vault-guard@\${VG_VERSION}"' "${ACTION_YML}" >/dev/null; then
-  printf 'action.yml no longer installs the pinned scanner globally\n' >&2
+if ! grep -n 'npm install -g --ignore-scripts "@vaultcompass/vault-guard@\${VG_VERSION}"' "${ACTION_YML}" >/dev/null; then
+  printf 'action.yml no longer installs the pinned scanner globally with --ignore-scripts\n' >&2
+  exit 1
+fi
+# The install runs on a runner holding the job's token, so no install in this
+# file may omit --ignore-scripts, and what arrives has to be verified before it
+# is trusted to render a verdict. Both are checked here as well as in the jest
+# suites because those run against a STUBBED npm: they prove the action asks,
+# and this proves the ask is still written down.
+if grep -nE '^[[:space:]]*npm install' "${ACTION_YML}" | grep -v -- '--ignore-scripts' >/dev/null; then
+  printf 'action.yml has an npm install without --ignore-scripts; the scanner is a control input and this step holds the job token\n' >&2
+  exit 1
+fi
+if ! grep -n 'npm audit signatures' "${ACTION_YML}" >/dev/null; then
+  printf 'action.yml no longer verifies the provenance of what it installed\n' >&2
   exit 1
 fi
 if ! grep -nE 'npm_config_prefix: \$\{\{ runner\.temp \}\}/vault-guard-action' "${ACTION_YML}" >/dev/null; then

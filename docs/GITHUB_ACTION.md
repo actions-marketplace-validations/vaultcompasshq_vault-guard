@@ -14,8 +14,8 @@ The composite action in the **repository root** installs the published
 
 ## The Action tag and the scanner version are two numbers
 
-`vaultcompasshq/vault-guard@v1.7.2` installs
-`@vaultcompass/vault-guard@1.7.0`. 1.7.1 and 1.7.2 were both action-only
+`vaultcompasshq/vault-guard@v1.7.3` installs
+`@vaultcompass/vault-guard@1.7.0`. 1.7.1, 1.7.2 and 1.7.3 were all action-only
 releases: they changed the Action and nothing in the scanner, so there was no
 new scanner to publish.
 Read the tag as "which version of the workflow step", not as "which version of
@@ -43,6 +43,43 @@ started from the runner temp rather than from the workspace, and the resulting
 binary is called by absolute path. The step then chdirs into the scan root,
 because vault-guard reads its config, resolves the trust base and reports every
 path relative to its own process cwd.
+
+The install also passes `--ignore-scripts`, so nothing in the resolved tree runs
+code on the runner at install time, and the step then runs `npm audit
+signatures` over what it installed.
+
+**What that verification proves, and what it does not.** It asks the registry
+for each name and version in the tree — the scanner included — and checks the
+registry signature served back, so an unpublished, replaced or unsigned package
+fails the step. It does **not** read the installed files: npm refetches manifests
+rather than hashing anything on disk, so it will not detect a tampered install.
+It does **not** defeat a compromised registry, which signs what it serves. And a
+**missing** attestation is not a failure, only a missing or invalid signature is,
+so it does not require provenance even though these packages publish it.
+
+> **Two ways this step fails closed, both on purpose.**
+>
+> **It needs npm 10.5.2 or newer.** `npm audit signatures` is not
+> version-stable: below 10.5.2 it fails on a *clean, untampered* install of
+> these packages, because the client's own bundled keys and TUF root are stale.
+> On npm 10.5.0 it reports "Someone might have tampered with these packages
+> since they were published on the registry!", naming ours. The Action refuses
+> up front and names the npm it found, so a stale client is reported as a stale
+> client rather than as a supply-chain incident.
+>
+> This Action installs its own Node 22, and **that is not on its own
+> sufficient**: `node-version` is a major-only spec and **Node 22.0.0 ships npm
+> 10.5.1**, one patch below the floor, and `setup-node` satisfies a major from
+> the runner's tool cache when it can. The floor is enforced rather than
+> assumed. Node 20.13.0 and later, and 22.1.0 and later, carry a usable npm.
+>
+> **It needs a registry that serves `/-/npm/v1/keys`.** If your runner points
+> npm at a mirror or a proxy that does not — via `actions/setup-node`'s
+> `registry-url:`, a corporate `~/.npmrc`, or `npm_config_registry` — the
+> install will succeed and this step will then fail with
+> `EMISSINGSIGNATUREKEY`. A sigstore or TUF outage has the same effect.
+>
+> If either blocks you, pin to `@v1.7.2`, which does not verify.
 
 **What this does not cover.** A `pull_request` run uses the workflow file as it
 is in the merge commit, so a pull request can edit or delete this step like any
@@ -166,7 +203,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
-      - uses: vaultcompasshq/vault-guard@v1.7.2
+      - uses: vaultcompasshq/vault-guard@v1.7.3
         with:
           format: sarif
 ```
@@ -198,7 +235,7 @@ not a clean scan and must not be reported as findings either.
 
 ```yaml
 - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-- uses: vaultcompasshq/vault-guard@v1.7.2
+- uses: vaultcompasshq/vault-guard@v1.7.3
   id: vg
   with:
     format: text
@@ -235,7 +272,7 @@ of its own:
       # the step fails with a 403 that says nothing about the scan.
       security-events: write
     steps:
-      - uses: vaultcompasshq/vault-guard@v1.7.2
+      - uses: vaultcompasshq/vault-guard@v1.7.3
         id: vg
         with:
           format: sarif
