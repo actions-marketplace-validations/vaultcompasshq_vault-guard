@@ -258,7 +258,7 @@ jobs:
           # Required on pull requests: pull-request mode reads the config and
           # the baseline from the base branch, which a shallow clone does not have.
           fetch-depth: 0
-      - uses: vaultcompasshq/vault-guard@v1.7.3
+      - uses: vaultcompasshq/vault-guard@v1.7.4
         id: vault-guard
         with:
           path: .
@@ -283,7 +283,7 @@ then decides the scanner, and there is one pin to bump instead of two that can
 disagree.
 
 **The Action tag and the scanner version are separate numbers, and they do not
-have to match.** `vaultcompasshq/vault-guard@v1.7.3` installs
+have to match.** `vaultcompasshq/vault-guard@v1.7.4` installs
 `@vaultcompass/vault-guard@1.7.0`, because that release changed the Action and
 nothing in the scanner, so there was no new scanner to publish. Read the tag as
 "which version of the workflow step", not as "which version of the scanner".
