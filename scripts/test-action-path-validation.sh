@@ -208,18 +208,44 @@ TAG_SCANNER_MAJOR=1
 TAG_SCANNER_MINOR=7
 TAG_SCANNER_PATCH=0
 
-# Guard: every constant copied into this file still equals the one in
-# action.yml. This is the direct answer to the hazard named above -- a copy that
-# drifts asserts the opposite of the shipped action and stays green while it does
-# it, which has already happened here once.
+# Guard: every CONSTANT copied into this file still equals the one in
+# action.yml, and is assigned there exactly once. A copy that drifts asserts the
+# opposite of the shipped action and stays green while it does it, which has
+# already happened here once.
+#
+# CONSTANTS ONLY, WHICH IS HALF THE DRIFT. The functions above are a hand-written
+# mirror of action.yml's comparison, and this guard says nothing about that
+# logic: splice a lexicographic compare into the real check in action.yml and
+# every assertion above stays green while the jest suites go red. A reviewer
+# demonstrated exactly that, on bash 3.2 and on bash 5. docs/INVARIANTS.md states
+# the same scope, that this file "asserts every constant it hand-copied". The
+# logic half is the separate drift check below, which runs the REAL extracted
+# step rather than the mirror.
+#
+# Exactly one assignment, not the first of several. `head -n 1` read whichever
+# came first, so a second assignment further down -- the one that would actually
+# be in effect -- could disagree with this file and never be seen.
 assert_action_constant() {
   local name="$1"
   local expected="$2"
+  local matches
+  local count
   local found
-  found="$(grep -oE "^[[:space:]]*${name}=[0-9]+" "${ACTION_YML}" | head -n 1 | grep -oE '[0-9]+$' || true)"
+  matches="$(grep -oE "^[[:space:]]*${name}=[0-9]+" "${ACTION_YML}" || true)"
+  if [[ -z "${matches}" ]]; then
+    count=0
+  else
+    count="$(printf '%s\n' "${matches}" | grep -c . | tr -d '[:space:]')"
+  fi
+  if [[ "${count}" != "1" ]]; then
+    printf 'action.yml assigns %s %s times; this file needs exactly one assignment to compare against\n' \
+      "${name}" "${count}" >&2
+    exit 1
+  fi
+  found="$(printf '%s\n' "${matches}" | grep -oE '[0-9]+$')"
   if [[ "${found}" != "${expected}" ]]; then
     printf 'action.yml has %s=%s and this file has %s; the hand copy has drifted\n' \
-      "${name}" "${found:-<missing>}" "${expected}" >&2
+      "${name}" "${found}" "${expected}" >&2
     exit 1
   fi
 }
@@ -319,11 +345,103 @@ if ! version_at_least "1.10.0" 1 8 0; then
   exit 1
 fi
 
+# Guard: THE SHIPPED CHECK, not the mirror above, orders numerically.
+#
+# Everything above this line runs `version_at_least`, which is hand-written
+# here. It proves the mirror right and says nothing about action.yml. Splice a
+# lexicographic compare into the real check and this file stayed green on both
+# bash 3.2 and bash 5 while the jest suites went red, which is the drift the
+# constant guard cannot see.
+#
+# So extract the REAL "Validate inputs" step and run it, on the one input that
+# separates the two orderings. `1.10.0` sorts BELOW `1.8.0` as text and above it
+# as a version, so a textual compare refuses the forward pin this rule
+# deliberately leaves open, and this check goes red.
+#
+# The tag scanner is advanced to 1.8.0 in a COPY of action.yml, the same move
+# the jest suite makes with its `future` script: today the flag floor and the
+# tag scanner are the same number, so no real input lands between them and the
+# shipped file cannot show the rule acting at all. The substitution is asserted
+# to have matched, so renaming or deleting the constant turns this red rather
+# than quietly testing the unmodified file. The repository's own action.yml is
+# never written to.
+#
+# The environment is the step's own `env:` mapping from action.yml plus the two
+# values under test. A step that grows a variable this list does not set will
+# fail under `set -u` and be reported here as a refusal, with the step's output
+# printed, rather than passing silently.
+assert_shipped_pr_check_orders_numerically() {
+  local copy="${SYNTAX_DIR}/action-future.yml"
+  local script="${SYNTAX_DIR}/validate-future.sh"
+  local out
+
+  sed 's/^\([[:space:]]*\)VG_TAG_SCANNER_MINOR=[0-9][0-9]*$/\1VG_TAG_SCANNER_MINOR=8/' \
+    "${ACTION_YML}" > "${copy}"
+  if ! grep -qE '^[[:space:]]*VG_TAG_SCANNER_MINOR=8$' "${copy}"; then
+    printf 'could not advance VG_TAG_SCANNER_MINOR to 8 in the copy of action.yml; the constant was renamed or reshaped\n' >&2
+    exit 1
+  fi
+  if ! node "${SCRIPTS_DIR}/extract-action-step.cjs" "${copy}" "Validate inputs" run > "${script}"; then
+    printf 'could not extract the Validate inputs step from the future-scanner copy of action.yml\n' >&2
+    exit 1
+  fi
+
+  if out="$(GITHUB_BASE_REF=main \
+    VG_VERSION=1.10.0 \
+    VG_PATH=. \
+    VG_FORMAT=sarif \
+    VG_SARIF_OUTPUT=vault-guard-results.sarif \
+    VG_TRUST_BASE=auto \
+    "${BASH}" --noprofile --norc -eo pipefail "${script}" 2>&1)"; then
+    return 0
+  fi
+
+  printf 'the SHIPPED pull-request check refused version 1.10.0 against a 1.8.0 tag scanner. 1.10.0 is FORWARD of 1.8.0, so the comparison in action.yml is textual where it has to be numeric (or the step now reads an environment variable this check does not set)\n' >&2
+  printf '%s\n' "${out}" >&2
+  exit 1
+}
+
+assert_shipped_pr_check_orders_numerically
+
 # Guard: the action gates this on GITHUB_BASE_REF, which is the same event test
 # the run step uses for `--trust-base`. A rule that fired on every event would
 # break push builds that pin an older scanner on purpose.
-if ! grep -n 'n "${GITHUB_BASE_REF:-}"' "${ACTION_YML}" >/dev/null; then
-  printf 'action.yml no longer tests for a pull-request event with GITHUB_BASE_REF\n' >&2
+#
+# ANCHORED TO ONE REGION OF ONE STEP, AND BOTH ENDS MATTER.
+#
+# A grep over the whole of action.yml stays green with this gate deleted: the
+# run step tests GITHUB_BASE_REF the same way to build `--trust-base`, so the
+# guard finds that copy and reports the validate step's gate present. Extracting
+# the validate step is not enough either, because the validate step ITSELF tests
+# the variable again further down, when it checks the shape of the ref the run
+# step will pass. So the region is bounded at BOTH ends: it starts at the flag
+# floor's verdict and stops at `VG_PR_SCANNER_OK=0`, which is the window the
+# gate has to sit in. The jest case `writes the pull-request check
+# accept-only-if, after the flag floor` asserts the same two bounds, as
+# floorAt < gateAt < initAt.
+#
+# Both bounds were proved by deleting the gate and watching this go red. An
+# earlier draft of this guard bounded only the start, and the deletion sailed
+# through it on the validate step's own second use of the variable.
+VALIDATE_SCRIPT="${SYNTAX_DIR}/validate-shipped.sh"
+if ! node "${SCRIPTS_DIR}/extract-action-step.cjs" "${ACTION_YML}" "Validate inputs" run > "${VALIDATE_SCRIPT}"; then
+  printf 'action.yml has no step named Validate inputs\n' >&2
+  exit 1
+fi
+
+# From the flag floor's verdict down to the line that opens the pull-request
+# check, inclusive. awk exits at that line, so nothing below it is searched.
+VALIDATE_GATE_REGION="${SYNTAX_DIR}/validate-gate-region.sh"
+awk '/VG_TOO_OLD == 1/ { seen = 1 }
+     seen { print; if ($0 ~ /VG_PR_SCANNER_OK=0/) exit }' \
+  "${VALIDATE_SCRIPT}" > "${VALIDATE_GATE_REGION}"
+if ! grep -n 'VG_PR_SCANNER_OK=0' "${VALIDATE_GATE_REGION}" >/dev/null; then
+  printf 'could not bound the pull-request check in the Validate inputs step: the flag floor verdict or VG_PR_SCANNER_OK=0 has moved or gone, so this guard has nothing to anchor to\n' >&2
+  exit 1
+fi
+
+if ! grep -n 'n "${GITHUB_BASE_REF:-}"' "${VALIDATE_GATE_REGION}" >/dev/null; then
+  printf 'the pull-request scanner check in Validate inputs is no longer gated on GITHUB_BASE_REF; it would fire on push events too\n' >&2
   exit 1
 fi
 

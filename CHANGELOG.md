@@ -19,10 +19,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   On pull-request events the step now refuses a `version` below the scanner this
   Action tag ships, naming both numbers and pointing at the fix, which is to
-  remove the input. Pinning **forward** is still accepted there: a newer scanner
-  is not a weaker one, and that is the direction the input exists for. Push
-  events are unaffected; there the workflow file is already in the protected
-  branch.
+  remove the input. Pinning **forward** is still accepted there, on an
+  assumption the rule does not enforce: that a newer scanner is at least as
+  strict. Forward pins are not bounded.
+
+  **Where it fires** is exactly where `GITHUB_BASE_REF` is set, which is
+  `pull_request` and `pull_request_target`. Push runs are out of scope and the
+  flag floor stays their only version gate. That is a scope statement, not a
+  safety argument: a push run on an unprotected feature branch runs that
+  branch's own workflow file, written by the same author, and is as
+  author-controlled as a pull request. It is not covered.
 
   **This costs consumers nothing today.** The tag scanner equals the only
   published scanner, `1.7.0`, so every workflow that clears the old floor on a

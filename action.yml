@@ -253,10 +253,14 @@ runs:
         # reviewer sees: deleting a security step reads as deleting a security
         # step, while `version: 1.7.0` reads as ordinary version management.
         #
-        # FORWARD STAYS ALLOWED. A newer scanner is not a weaker one, and the
-        # `version` input exists so a consumer can pin one. Only the backward
-        # direction, on the one event where the workflow file is written by the
-        # side under judgment, is refused.
+        # FORWARD STAYS ALLOWED, ON AN ASSUMPTION THIS RULE DOES NOT ENFORCE.
+        # The rule assumes a newer scanner is at least as strict as the one this
+        # tag ships. Nothing here checks that, and forward pins are not bounded:
+        # any higher version is accepted, including one that does not exist yet
+        # and one whose rules turn out to be weaker. The `version` input exists
+        # so a consumer can pin one. Only the backward direction, on the one
+        # event where the workflow file is written by the side under judgment,
+        # is refused.
         #
         # A SEPARATE CONSTANT FROM VG_MIN_*, and they are the same number today.
         # They mean different things. VG_MIN_* is FLAG COMPATIBILITY: the oldest
@@ -271,6 +275,18 @@ runs:
         # tell a pin from a default and the constant is the only source of
         # truth. It is safe to trust because action.yml comes from the ref the
         # consumer's workflow names, not from the pull request's tree.
+        #
+        # THAT HOLDS WHEN THE CONSUMER NAMES THIS ACTION BY OWNER AND REF, as
+        # `vaultcompasshq/vault-guard@TAG`. A LOCAL-PATH reference instead, the
+        # `./some/dir` form, reads action.yml out of the pull request's OWN
+        # tree, so the constant below is author-controlled and this rule
+        # protects nothing there. Self-testing workflows inside this repository
+        # are the usual reason to reference it that way.
+        #
+        # (Spelled without the `uses` KEY on purpose: a text guard in
+        # action-path-validation.test.ts requires every one of those in this
+        # file to end in a 40-character sha, and it cannot tell prose from a
+        # step.)
         VG_TAG_SCANNER_MAJOR=1
         VG_TAG_SCANNER_MINOR=7
         VG_TAG_SCANNER_PATCH=0
@@ -293,6 +309,15 @@ runs:
           # Component by component, never as text: `1.10.0` sorts BELOW `1.7.0`
           # as a string and above it as a version, and a lexicographic check
           # would refuse the forward pin this rule deliberately leaves open.
+          #
+          # A DIFFERENT PRIMITIVE FROM THE FLAG FLOOR ABOVE, and the two are not
+          # interchangeable. The floor compares with (( )), which is arithmetic
+          # evaluation. This check compares with `[ -gt ]` in an accept-only-if
+          # shape: a malformed or out-of-range component makes `[` exit 2, `if`
+          # reads that 2 as false, so VG_PR_SCANNER_OK stays 0 and the step
+          # refuses. They disagree about what an out-of-range integer means, and
+          # both fall safe, so do not rewrite one into the other on the grounds
+          # that they look alike.
           VG_PR_SCANNER_OK=0
           if [ "${VG_MAJOR}" -gt "${VG_TAG_SCANNER_MAJOR}" ] 2>/dev/null; then
             VG_PR_SCANNER_OK=1
@@ -307,7 +332,7 @@ runs:
           if [ "${VG_PR_SCANNER_OK}" -ne 1 ]; then
             printf '::error::vault-guard: on a pull request the `version` input may not ask for a scanner older than the one this action tag ships. It asks for %s, and this tag ships %s.\n' "${VG_VERSION}" "${VG_TAG_SCANNER}"
             printf '::error::On a same-repo pull_request event GitHub runs the workflow file from the pull request head, so on this event the workflow file belongs to the pull request. An older scanner here would let a change choose the rules it is judged by.\n'
-            printf '::error::REMOVE the `version` input and this cannot happen: the default is the scanner this action tag ships. Pinning FORWARD is still accepted on a pull request, because a newer scanner is not a weaker one.\n'
+            printf '::error::REMOVE the `version` input and this cannot happen: the default is the scanner this action tag ships. Pinning FORWARD is still accepted on a pull request: this rule assumes a newer scanner is at least as strict, and it does not bound how far forward you pin.\n'
             exit 1
           fi
         fi

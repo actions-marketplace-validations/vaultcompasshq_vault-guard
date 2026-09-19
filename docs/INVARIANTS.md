@@ -295,8 +295,10 @@ step, while `version: 1.7.0` reads as version management.
 
 So on a pull-request event the step refuses a version BELOW the scanner this
 action tag ships, and accepts anything at or above it. Pinning FORWARD stays
-allowed, because a newer scanner is not a weaker one, and that is the direction
-the input exists for.
+allowed, which is the direction the input exists for. That rests on an
+ASSUMPTION the rule does not enforce: that a newer scanner is at least as
+strict. Nothing bounds a forward pin, so a version ahead of the tag scanner is
+accepted whatever its rules turn out to be.
 
 Four properties, each load-bearing:
 
@@ -312,7 +314,12 @@ Four properties, each load-bearing:
   names, not from the pull request's tree.
 - The event test is `GITHUB_BASE_REF` being non-empty, the same one the run step
   uses to decide whether to pass `--trust-base` under `auto`, rather than a
-  second detector to keep in step.
+  second detector to keep in step. It rests on a PLATFORM GUARANTEE worth
+  recording, because a same-repo pull request's author writes the workflow file
+  and the obvious bypass is therefore `env: GITHUB_BASE_REF: ""` at job level:
+  GitHub documents that the default `GITHUB_*` and `RUNNER_*` variables cannot
+  be overwritten and that such an assignment is ignored
+  (https://docs.github.com/en/actions/reference/workflows-and-actions/variables).
 - Written accept-only-if, not refuse-if, for the same reason as the npm floor:
   `[` returns 2 on a malformed comparison and an `if` reads 2 as false, so a
   refuse-if shape turns an arithmetic error into permission.
@@ -321,16 +328,25 @@ Four properties, each load-bearing:
 rule.** It closes pinning backward on a SAME-REPO pull request, and nothing
 else.
 
-- Not forks. A fork's `pull_request` run uses the BASE repository's workflow
-  file, so a fork author never writes the `version:` that judges them and there
-  is nothing here to close.
+- Not forks, and on forks the rule costs something rather than merely doing
+  nothing. A fork's `pull_request` run uses the BASE repository's workflow file,
+  so a fork author never writes the `version:` that judges them and there is no
+  hole there to close. But `GITHUB_BASE_REF` IS set on a fork pull request, so
+  the check fires anyway and judges the base repository's own trusted workflow
+  file. Once a newer scanner ships, a maintainer's deliberate backward pin in
+  that base workflow fails EVERY fork pull-request run: a pure false refusal, on
+  a pin nobody untrusted wrote. The remedy is the same as for any consumer,
+  which is to remove the `version:` input.
 - Not a pull request that deletes the step, moves the `uses:` pin to an older
   action tag, or edits the job away. Those are workflow-file edits, and the
   control is branch protection with required review on `.github/workflows/**`.
   Nothing in `action.yml` can substitute for it.
-- Not push events. There the workflow file is already in the protected branch,
-  so pinning back is version management rather than a bypass, and the flag floor
-  remains the only version gate.
+- Not push events. The rule fires exactly where `GITHUB_BASE_REF` is set, which
+  is `pull_request` and `pull_request_target`; push runs are out of scope and
+  the flag floor remains their only version gate. Read that as scope, not as
+  safety: a push to an UNPROTECTED feature branch runs that branch's own
+  workflow file, written by the same author, with `GITHUB_BASE_REF` empty, so it
+  is as author-controlled as a pull request and the rule does not cover it.
 - It costs consumers nothing today, because the tag scanner equals the only
   published version. It starts costing something the first time two versions
   exist.

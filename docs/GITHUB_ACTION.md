@@ -126,19 +126,33 @@ outright.
 
 **So on a pull-request event the Action refuses a `version` below the scanner
 the tag ships, and accepts anything at or above it.** Pinning forward is still
-allowed there — a newer scanner is not a weaker one. The comparison is against a
+allowed there, on an assumption the rule does not enforce: that a newer scanner
+is at least as strict. Nothing bounds a forward pin. The comparison is against a
 constant in `action.yml`, which comes from the ref your workflow's `uses:` names
-rather than from the pull request's tree. Push events are unaffected: there the
-workflow file is already in the protected branch.
+rather than from the pull request's tree.
+
+The rule fires exactly where `GITHUB_BASE_REF` is set, which is `pull_request`
+and `pull_request_target`. Push runs are out of scope, and the flag floor stays
+their only version gate. That is a statement of scope, not a safety argument: a
+push to an unprotected branch runs that branch's own workflow file, written by
+the same author, so it is as author-controlled as a pull request and is not
+covered.
 
 The refusal names both numbers and the fix, which is to **remove the `version`
 input**.
 
-**What it does not cover.** A fork's `pull_request` run uses the base
-repository's workflow file, so there is nothing to close there. And it does not
-stop a pull request deleting the step, or moving the `uses:` pin to an older
-Action tag — those are workflow-file edits, and the control is branch protection
-with required review on `.github/workflows/**`. See
+**What it does not cover, and what it costs on forks.** A fork's `pull_request`
+run uses the base repository's workflow file, so a fork author never writes the
+`version:` that judges them and there is no hole there to close. The rule still
+fires on that run: `GITHUB_BASE_REF` is set on a fork pull request too, so the
+check runs and judges your own trusted workflow file. Once a newer scanner
+exists, a backward pin you deliberately wrote in the base workflow will fail
+every fork pull request, which is a refusal on a pin nobody untrusted wrote. If
+you need that pin, remove the `version:` input or raise it.
+
+It also does not stop a pull request deleting the step, or moving the `uses:`
+pin to an older Action tag. Those are workflow-file edits, and the control is
+branch protection with required review on `.github/workflows/**`. See
 [GITHUB_BRANCH_PROTECTION.md](./GITHUB_BRANCH_PROTECTION.md).
 
 ## Pull requests

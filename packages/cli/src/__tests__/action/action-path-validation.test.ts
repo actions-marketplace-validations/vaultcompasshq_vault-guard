@@ -266,19 +266,21 @@ describe('action.yml "Validate inputs", pinning the scanner backward on a pull r
     expect(run.stdout).toContain('REMOVE the `version` input');
   });
 
-  it('leaves push events alone, where the workflow file is not the pull request', () => {
+  it('leaves push events alone, where GITHUB_BASE_REF is not set', () => {
     // The event test is GITHUB_BASE_REF being non-empty, which is exactly how
     // the run step decides to pass `--trust-base` under `auto`. With it unset
-    // the same low pin is accepted: on a push the workflow file is already in
-    // the protected branch, so pinning back there is version management rather
-    // than a bypass, and the flag floor remains the only version gate.
+    // the same low pin is accepted: push runs are out of this rule's scope and
+    // the flag floor remains their only version gate. That is scope, not
+    // safety -- a push to an unprotected branch runs that branch's own workflow
+    // file and is as author-controlled as a pull request.
     const future = scriptWithFutureTagScanner();
     expect(runValidateScript(future, { version: '1.7.0' }, {}).status).toBe(0);
     expect(runValidateScript(future, { version: '1.7.1' }, {}).status).toBe(0);
   });
 
   it('allows pinning forward on a pull request, and orders numerically', () => {
-    // A newer scanner is not a weaker one, so pinning FORWARD stays allowed.
+    // Pinning FORWARD stays allowed, on the rule's unenforced assumption that a
+    // newer scanner is at least as strict; forward pins are not bounded.
     // `1.10.0` is the case a lexicographic comparison gets wrong: it sorts
     // below `1.8.0` as text and above it as a version, and refusing it would
     // refuse the very direction this rule exists to leave open.
