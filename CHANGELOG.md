@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.3] - 2026-09-18
+
+**An action-only release. The tag moves; the npm packages do not.** Nothing in
+the scanner changed, so `@vaultcompass/vault-guard` and the other three packages
+stay at 1.7.0 on npm, and the Action's `version` default stays `1.7.0`.
+`vaultcompasshq/vault-guard@v1.7.3` installs `@vaultcompass/vault-guard@1.7.0`.
+
+### Fixed
+
+- **A floor on the npm client, so the Action cannot report a clean install as
+  tampered with.** `npm audit signatures`, added below, is not version-stable:
+  below npm **10.5.2** it fails on an untampered install of these very
+  packages, because the client's own bundled keys and TUF root are stale. On
+  10.5.0 it reports *"Someone might have tampered with these packages since
+  they were published on the registry!"*, naming ours; on 10.2.4 it is
+  `EEXPIREDSIGNATUREKEY`.
+
+  Bisected against a real install with a **cold cache and a fresh HOME**, so no
+  newer client could have primed the TUF root or the key set: 8.19.4, 9.9.4,
+  10.2.4, 10.5.0 and 10.5.1 fail; **10.5.2** and every later version pass, and
+  10.5.2 verifies the same package and attestation counts as current npm rather
+  than a reduced set.
+
+  The Action now refuses up front and names the npm it found, so a stale client
+  is reported as a stale client rather than as a supply-chain incident.
+
+  **`node-version: '22'` is not on its own sufficient**, which is why this
+  Action carries the floor despite installing its own Node. It is a major-only
+  spec and **Node 22.0.0 ships npm 10.5.1**, one patch below the floor;
+  `setup-node` satisfies a major from the runner's tool cache when it can. Node
+  20.13.0 and later, and 22.1.0 and later, carry a usable npm.
+
+  The comparison is written as *accept only if provably at or above the floor*
+  rather than *refuse if below it*. `[` returns 2 on a malformed comparison and
+  an `if` reads 2 as false, so a refuse-if-bad shape turns any arithmetic error
+  into permission to proceed. That is how the first two versions of this guard
+  failed open.
+
 ### Security
 
 - **The Action no longer runs install scripts, and verifies what it installed.**
