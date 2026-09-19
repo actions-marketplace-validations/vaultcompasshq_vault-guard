@@ -152,7 +152,7 @@ function makeRunner(inputs: Record<string, string> = {}, npmVersion = '10.9.2'):
       `printf 'argv=%s\\n' "$*" >> ${JSON.stringify(npmRecord)}\n` +
       `printf 'prefix=%s\\n' "\${npm_config_prefix:-unset}" >> ${JSON.stringify(npmRecord)}\n` +
       // A real npm answers `--version`, and the step now reads it: below
-      // 10.6.0 the verification calls a clean install tampered with. Written
+      // 10.5.2 the verification calls a clean install tampered with. Written
       // with `%b` so a test can hand it MULTIPLE lines and reproduce a client
       // printing an upgrade notice above its version, the shape that defeated
       // two earlier versions of the floor.
@@ -365,7 +365,7 @@ describe('action.yml "Install vault-guard outside the workspace"', () => {
   }
 
   it('refuses an npm too old to verify, rather than calling a clean install tampered with', () => {
-    // `npm audit signatures` is not version-stable. Below 10.6.0 it fails on a
+    // `npm audit signatures` is not version-stable. Below 10.5.2 it fails on a
     // CLEAN install of these very packages: on 10.5.0 it says "Someone might
     // have tampered with these packages", naming ours; on 10.2.4 it is
     // EEXPIREDSIGNATUREKEY. Both false, both alarming.
@@ -382,8 +382,7 @@ describe('action.yml "Install vault-guard outside the workspace"', () => {
   });
 
   it('accepts the first npm that actually verifies, and newer', () => {
-    // The floor must not be too high either: 10.6.0 is the first version
-    // measured to pass, so refusing it would break consumers for nothing.
+    // The floor must not be too high either, and this list pins that edge.
     // 10.5.2 is the FIRST version measured to pass, with a cold cache and a
     // fresh HOME so no newer client could have primed the key set. It is
     // listed first deliberately: the floor was 10.6.0 until a review bisected
