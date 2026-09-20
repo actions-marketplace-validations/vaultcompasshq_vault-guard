@@ -320,6 +320,19 @@ Four properties, each load-bearing:
   GitHub documents that the default `GITHUB_*` and `RUNNER_*` variables cannot
   be overwritten and that such an assignment is ignored
   (https://docs.github.com/en/actions/reference/workflows-and-actions/variables).
+  The Validate inputs step also DECLARES `GITHUB_BASE_REF: ${{ github.base_ref }}`
+  in its own `env:` mapping, the same spelling the run step uses. A step-level
+  entry wins over a job-level one, and `github.base_ref` is read out of the
+  event payload rather than out of anything a workflow author writes, so the
+  value cannot come from the workflow file either way. The declared form is
+  defense in depth and is stronger than a bare read of the runner default,
+  because its value comes from the event payload rather than from anything a
+  workflow author can write, but it is not absolute immunity: a job-level
+  `env: BASH_ENV: <a file>` that runs `unset GITHUB_BASE_REF` would still
+  defeat it, because BASH_ENV is sourced before the step script runs and is
+  not itself one of the GITHUB_*/RUNNER_* variables the no-overwrite guarantee
+  covers. The platform no-overwrite guarantee above remains a second, separate
+  line of defence, and neither form is depended on as the sole control.
 - Written accept-only-if, not refuse-if, for the same reason as the npm floor:
   `[` returns 2 on a malformed comparison and an `if` reads 2 as false, so a
   refuse-if shape turns an arithmetic error into permission.
