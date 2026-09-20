@@ -166,6 +166,11 @@ function loadAction(actionPath) {
         return ctx.inputs[name];
       }
       if (expression === 'runner.temp') return ctx.runnerTemp;
+      // Empty outside a pull request, which is what Actions sets. Callers that
+      // want a pull-request run pass extraEnv.GITHUB_BASE_REF after this.
+      if (expression === 'github.base_ref') {
+        return typeof ctx.baseRef === 'string' ? ctx.baseRef : '';
+      }
       throw new Error(`the harness cannot evaluate the expression ${expression}`);
     });
   }

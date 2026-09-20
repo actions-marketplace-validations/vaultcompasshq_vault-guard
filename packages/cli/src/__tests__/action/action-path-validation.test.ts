@@ -29,6 +29,7 @@ interface StepContext {
   inputs: Record<string, string>;
   runnerTemp: string;
   workspace: string;
+  baseRef?: string;
 }
 
 interface ActionFile {
@@ -37,6 +38,7 @@ interface ActionFile {
   extractRunScript(stepName: string): string;
   extractStepEnv(stepName: string): Record<string, string>;
   extractStepWorkingDirectory(stepName: string): string;
+  evaluateTemplate(template: string, ctx: StepContext): string;
   evaluateStepEnv(stepName: string, ctx: StepContext): Record<string, string>;
   cwdForStep(stepName: string, ctx: StepContext): string;
 }
@@ -57,6 +59,78 @@ const { loadAction } = require(path.join(REPO_ROOT, 'scripts', 'lib', 'action-st
 
 const action = loadAction(ACTION_PATH);
 const actionYml = action.text;
+
+// Keyed on the version: input block inside inputs:, the same scoping as
+// scripts/lib/release-kind.mjs. The old /default:\\s*(\\S+)\\s*\\n\\s*path:/
+// reader matched whichever default sat above path:.
+function readActionVersionDefault(yml: string): string {
+  const lines = yml.split('\n');
+  const inputsAt = lines.findIndex((line) => /^inputs:\s*$/.test(line));
+  if (inputsAt === -1) {
+    throw new Error('action.yml has no top-level inputs: block');
+  }
+  let inputsEnd = lines.length;
+  const nextTop = lines.findIndex((line, i) => i > inputsAt && /^\S/.test(line));
+  if (nextTop !== -1) {
+    inputsEnd = nextTop;
+  }
+  const start = lines.findIndex(
+    (line, i) => i > inputsAt && i < inputsEnd && /^ {2}version:\s*$/.test(line),
+  );
+  if (start === -1) {
+    throw new Error('action.yml has no version: input inside inputs:');
+  }
+  const found: string[] = [];
+  lines.slice(start + 1, inputsEnd).some((line) => {
+    if (/^ {0,2}\S/.test(line) && line.trim() !== '') {
+      return true;
+    }
+    const match = /^ {4}default:\s*(.*)$/.exec(line);
+    if (match !== null) {
+      found.push(match[1].trim().replace(/^['"]|['"]$/g, ''));
+    }
+    return false;
+  });
+  if (found.length !== 1) {
+    throw new Error(`version: input has ${found.length} default: keys`);
+  }
+  return found[0];
+}
+
+function allRunBodies(): string {
+  return [VALIDATE_STEP, INSTALL_STEP, RUN_STEP].map((name) => action.extractRunScript(name)).join(
+    '\n',
+  );
+}
+
+function runBodiesFrom(yml: string): string {
+  const lines = yml.split('\n');
+  const bodies: string[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    if (lines[i].trim() === 'run: |') {
+      const indent = lines[i].length - lines[i].trimStart().length + 2;
+      const body: string[] = [];
+      i += 1;
+      while (i < lines.length) {
+        const line = lines[i];
+        if (line.trim().length === 0) {
+          body.push('');
+          i += 1;
+          continue;
+        }
+        const lineIndent = line.length - line.trimStart().length;
+        if (lineIndent < indent) break;
+        body.push(line.slice(indent));
+        i += 1;
+      }
+      bodies.push(body.join('\n'));
+      continue;
+    }
+    i += 1;
+  }
+  return bodies.join('\n');
+}
 
 const INSTALL_STEP = 'Install vault-guard outside the workspace';
 const RUN_STEP = 'Run vault-guard';
@@ -160,12 +234,10 @@ describe('action.yml "Validate inputs", version', () => {
     // bumping this default would ship an action that installs a version nobody
     // is publishing any more; turning this red is how that gets noticed in the
     // PR that bumps it.
-    const defaultAt = /default:\s*(\S+)\s*\n\s*path:/.exec(actionYml);
-    expect(defaultAt).not.toBeNull();
     const cliVersion = JSON.parse(
       readFileSync(path.join(REPO_ROOT, 'packages', 'cli', 'package.json'), 'utf-8'),
     ).version;
-    expect((defaultAt as RegExpExecArray)[1]).toBe(cliVersion);
+    expect(readActionVersionDefault(actionYml)).toBe(cliVersion);
   });
 
   it('refuses a scanner too old for the flags this action tag passes', () => {
@@ -203,9 +275,7 @@ describe('action.yml "Validate inputs", version', () => {
     // Two numbers in one file that have to move together: raising the floor
     // without raising the default would make the action refuse its own default
     // and fail every run that did not set the input.
-    const defaultAt = /default:\s*(\S+)\s*\n\s*path:/.exec(actionYml);
-    expect(defaultAt).not.toBeNull();
-    const defaultVersion = (defaultAt as RegExpExecArray)[1];
+    const defaultVersion = readActionVersionDefault(actionYml);
     expect([defaultVersion, runValidateWith({ version: defaultVersion }).status]).toEqual([
       defaultVersion,
       0,
@@ -332,9 +402,7 @@ describe('action.yml "Validate inputs", pinning the scanner backward on a pull r
     ).version;
     const tagScanner = `${tagScannerPart('MAJOR')}.${tagScannerPart('MINOR')}.${tagScannerPart('PATCH')}`;
     expect(tagScanner).toBe(cliVersion);
-    const defaultAt = /default:\s*(\S+)\s*\n\s*path:/.exec(actionYml);
-    expect(defaultAt).not.toBeNull();
-    expect((defaultAt as RegExpExecArray)[1]).toBe(tagScanner);
+    expect(readActionVersionDefault(actionYml)).toBe(tagScanner);
   });
 
   it('keeps the tag scanner a separate constant from the flag floor', () => {
@@ -681,8 +749,59 @@ describe('action.yml text guards', () => {
     }
   });
 
-  it('never interpolates the base ref into a run body', () => {
-    expect(actionYml).not.toMatch(/\$\{\{[^}]*base_ref/i);
+  it('reads the validate step from the environment rather than expanding expressions into a script', () => {
+    // Conductor shape: an expression expanded inside a run block is pasted in
+    // as source text before the shell sees it. So the RUN BODY must contain
+    // no ${{ }} at all; the expressions live only in the step's env: mapping.
+    // A whole-file grep for base_ref wrongly forbids the safe env: form.
+    expect(action.extractRunScript(VALIDATE_STEP)).not.toMatch(/\$\{\{/);
+    expect(allRunBodies()).not.toMatch(/\$\{\{/);
+  });
+
+  it('flags an expression inside a run body and ignores one in an env mapping', () => {
+    const injected = actionYml.replace(
+      'if [[ -n "${GITHUB_BASE_REF:-}" ]]; then',
+      'if [[ -n "${{ github.base_ref }}" ]]; then',
+    );
+    expect(runBodiesFrom(injected)).toMatch(/\$\{\{/);
+    const envDeclared = actionYml.includes('GITHUB_BASE_REF: ${{ github.base_ref }}')
+      ? actionYml
+      : actionYml.replace(
+          'VG_TRUST_BASE: ${{ inputs.trust-base }}',
+          'VG_TRUST_BASE: ${{ inputs.trust-base }}\n        GITHUB_BASE_REF: ${{ github.base_ref }}',
+        );
+    expect(runBodiesFrom(envDeclared)).not.toMatch(/\$\{\{/);
+  });
+
+  it('declares the pull-request test from the event payload', () => {
+    // A step-level env: entry wins over a job-level one, and github.base_ref
+    // is resolved from the event payload rather than from anything the
+    // workflow author writes.
+    expect(action.extractStepEnv(VALIDATE_STEP).GITHUB_BASE_REF).toBe('${{ github.base_ref }}');
+  });
+
+  it('evaluates github.base_ref so the validate harness can read the new mapping', () => {
+    const ctx = { inputs: {}, runnerTemp: '/tmp', workspace: '/ws' };
+    expect(action.evaluateTemplate('${{ github.base_ref }}', ctx)).toBe('');
+    expect(action.evaluateTemplate('${{ github.base_ref }}', { ...ctx, baseRef: 'main' })).toBe(
+      'main',
+    );
+  });
+
+  it('binds the version default to the version input, not to whichever default sits above path', () => {
+    // J12: the old /default:\\s*(\\S+)\\s*\\n\\s*path:/ reader matched the
+    // decoy. The keyed reader stays bound to the version: block, so the
+    // drift tests go red when the real default moves.
+    const cliVersion = JSON.parse(
+      readFileSync(path.join(REPO_ROOT, 'packages', 'cli', 'package.json'), 'utf-8'),
+    ).version;
+    const moved = '9.9.9';
+    const decoyYml = actionYml.replace(
+      /^ {4}default:\s*\S+\s*\n {2}path:/m,
+      `    default: ${moved}\n  decoy:\n    default: ${cliVersion}\n  path:`,
+    );
+    expect(/default:\s*(\S+)\s*\n\s*path:/.exec(decoyYml)?.[1]).toBe(cliVersion);
+    expect(readActionVersionDefault(decoyYml)).toBe(moved);
   });
 
   it('pins every third-party action to a full commit sha', () => {

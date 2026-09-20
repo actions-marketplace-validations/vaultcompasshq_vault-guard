@@ -561,6 +561,12 @@ assert_step_parses() {
     printf 'the run script of step %s does not parse under %s (bash %s)\n' "${step}" "${BASH}" "${BASH_VERSION}" >&2
     exit 1
   fi
+  # An expression inside a run body is pasted in as source text. The same
+  # expression in an env: mapping is the safe form and is checked elsewhere.
+  if grep -nE '\$\{\{' "${script}" >/dev/null; then
+    printf 'step %s interpolates a GitHub expression into a run body (command injection)\n' "${step}" >&2
+    exit 1
+  fi
 }
 
 assert_step_parses "Validate inputs"
@@ -738,13 +744,12 @@ if [[ "${scan_line}" != *'TRUST_ARGS[@]+'* ]]; then
   exit 1
 fi
 
-# Guard: the base ref must never be interpolated into a run body as a GitHub
-# expression. That substitution happens before the shell parses the script, so
-# no amount of quoting downstream helps.
-if grep -nE '\$\{\{[^}]*base_ref' "${ACTION_YML}" >/dev/null; then
-  printf 'action.yml interpolates base_ref into a run body (command injection)\n' >&2
-  exit 1
-fi
+# Guard: no GitHub expression may be interpolated into a run body. That
+# substitution happens before the shell parses the script, so no amount of
+# quoting downstream helps. The same expression in an env: mapping is the
+# safe form -- Actions expands it into the env var at runtime -- and is how
+# Validate inputs declares GITHUB_BASE_REF from the event payload. The check
+# lives in assert_step_parses, which reads each extracted run script.
 
 # Names the interpreter, not just the version: the whole point of the syntax
 # check above is which bash did the parsing, so the green line has to say.
