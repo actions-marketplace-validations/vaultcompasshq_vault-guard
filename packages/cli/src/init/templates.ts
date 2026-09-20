@@ -18,7 +18,7 @@ export const INIT_TEMPLATE_VERSION = '4';
  * separation, and docs/INVARIANTS.md lists every other place either number
  * appears.
  */
-export const ACTION_TAG = 'v1.7.4';
+export const ACTION_TAG = 'v1.8.0';
 
 /**
  * `github/codeql-action/upload-sarif`, pinned to a full commit SHA rather than

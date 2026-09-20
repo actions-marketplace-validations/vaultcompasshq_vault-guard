@@ -9,7 +9,7 @@ inputs:
   version:
     description: |
       The exact version of `@vaultcompass/vault-guard` to install, such as
-      `1.7.0`. Validated against
+      `1.8.0`. Validated against
       `^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`, and the default is
       the SCANNER version this action tag shipped with, which is not always the
       same number as the tag: an action-only release moves the tag and leaves
@@ -40,7 +40,7 @@ inputs:
       request is not the place to widen a pattern for the convenience of
       testing one.
     required: false
-    default: 1.7.0
+    default: 1.8.0
   path:
     description: |
       Path to scan, relative to the workspace root. Must be 1..256 characters
@@ -288,7 +288,7 @@ runs:
         # file to end in a 40-character sha, and it cannot tell prose from a
         # step.)
         VG_TAG_SCANNER_MAJOR=1
-        VG_TAG_SCANNER_MINOR=7
+        VG_TAG_SCANNER_MINOR=8
         VG_TAG_SCANNER_PATCH=0
         VG_TAG_SCANNER="${VG_TAG_SCANNER_MAJOR}.${VG_TAG_SCANNER_MINOR}.${VG_TAG_SCANNER_PATCH}"
 

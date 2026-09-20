@@ -1,6 +1,6 @@
 {
   "name": "@vaultcompass/vault-guard",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "description": "Block secrets at commit and in CI. Pre-commit hooks, SARIF output, and fast staged-file scans for AI-native workflows.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -76,7 +76,7 @@ const INSTALL_STEP = 'Install vault-guard outside the workspace';
 const RUN_STEP = 'Run vault-guard';
 
 const DEFAULT_INPUTS: Record<string, string> = {
-  version: '1.7.0',
+  version: '1.8.0',
   path: '.',
   format: 'sarif',
   'sarif-output': 'vault-guard-results.sarif',
@@ -310,7 +310,7 @@ describe('action.yml "Install vault-guard outside the workspace"', () => {
     const run = runInstall();
     expect(run.status).toBe(0);
     expect(run.record).toContain(
-      'argv=install -g --ignore-scripts @vaultcompass/vault-guard@1.7.0',
+      'argv=install -g --ignore-scripts @vaultcompass/vault-guard@1.8.0',
     );
   });
 
