@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- The Validate inputs step now declares GITHUB_BASE_REF from the event
+  payload in its env mapping, so the pull-request test cannot come from the
+  workflow file even if the platform no-overwrite guarantee failed. The
+  version-default drift tests now read that default from the version input
+  block, not from whichever default sits above path.
+
 ## [1.8.0] - 2026-09-19
 
 **Minor bump on all four packages.** `@vaultcompass/vault-guard`,
