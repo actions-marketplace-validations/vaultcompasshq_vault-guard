@@ -1,6 +1,6 @@
 {
   "name": "@vaultcompass/vault-guard-telemetry",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "description": "Local-only Anthropic token cost and session tracking via the Vault Guard proxy. No cloud.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

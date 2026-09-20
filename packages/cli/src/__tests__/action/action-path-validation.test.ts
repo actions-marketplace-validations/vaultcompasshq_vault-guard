@@ -62,7 +62,7 @@ const INSTALL_STEP = 'Install vault-guard outside the workspace';
 const RUN_STEP = 'Run vault-guard';
 
 const DEFAULT_INPUTS: Record<string, string> = {
-  version: '1.7.0',
+  version: '1.8.0',
   path: '.',
   format: 'sarif',
   'sarif-output': 'vault-guard-results.sarif',
@@ -260,7 +260,7 @@ describe('action.yml "Validate inputs", pinning the scanner backward on a pull r
     // that does not say which two values disagree sends the reader away to
     // work it out.
     expect(run.stdout).toContain('1.7.0');
-    expect(run.stdout).toContain('1.8.0');
+    expect(run.stdout).toContain('1.9.0');
     expect(run.stdout).toContain('pull request');
     // And the remedy, which is to stop pinning at all.
     expect(run.stdout).toContain('REMOVE the `version` input');
@@ -285,7 +285,7 @@ describe('action.yml "Validate inputs", pinning the scanner backward on a pull r
     // below `1.8.0` as text and above it as a version, and refusing it would
     // refuse the very direction this rule exists to leave open.
     const future = scriptWithFutureTagScanner();
-    for (const ok of ['1.8.0', '1.8.1', '1.9.0', '1.10.0', '2.0.0', '10.0.0']) {
+    for (const ok of ['1.9.0', '1.9.1', '1.10.0', '2.0.0', '10.0.0']) {
       expect([
         ok,
         runValidateScript(future, { version: ok }, { GITHUB_BASE_REF: 'main' }).status,
@@ -300,7 +300,7 @@ describe('action.yml "Validate inputs", pinning the scanner backward on a pull r
     const shipped = `${tagScannerPart('MAJOR')}.${tagScannerPart('MINOR')}.${tagScannerPart('PATCH')}`;
     expect(runValidateWith({ version: shipped }, { GITHUB_BASE_REF: 'main' }).status).toBe(0);
     expect(runValidateWith({}, { GITHUB_BASE_REF: 'main' }).status).toBe(0);
-    for (const ok of ['1.7.1', '1.8.0', '1.10.0', '2.0.0']) {
+    for (const ok of ['1.8.0', '1.8.1', '1.10.0', '2.0.0']) {
       expect([ok, runValidateWith({ version: ok }, { GITHUB_BASE_REF: 'main' }).status]).toEqual([
         ok,
         0,

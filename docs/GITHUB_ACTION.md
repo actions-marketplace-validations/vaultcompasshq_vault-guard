@@ -9,14 +9,16 @@ The composite action in the **repository root** installs the published
 1. **`actions/checkout`** of your repository **before** this action (the action
    does not check out your code; it only installs Node and the scanner).
 2. A **published** `@vaultcompass/vault-guard` at the exact version the
-   `version` input names (default `1.7.0`, the scanner this Action tag shipped
+   `version` input names (default `1.8.0`, the scanner this Action tag shipped
    with).
 
 ## The Action tag and the scanner version are two numbers
 
-`vaultcompasshq/vault-guard@v1.7.4` installs
-`@vaultcompass/vault-guard@1.7.0`. 1.7.1 through 1.7.4 were all action-only
-releases: they changed the Action and nothing in the scanner, so there was no
+`vaultcompasshq/vault-guard@v1.8.0` installs `@vaultcompass/vault-guard@1.8.0`:
+this is a package release, so the tag and the scanner move together. They are
+still allowed to differ -- `vaultcompasshq/vault-guard@v1.7.4` installed
+`@vaultcompass/vault-guard@1.7.0`; 1.7.1 through 1.7.4 were all action-only
+releases that changed the Action and nothing in the scanner, so there was no
 new scanner to publish.
 Read the tag as "which version of the workflow step", not as "which version of
 the scanner", and leave `version` out so there is one pin to bump rather than
@@ -92,7 +94,7 @@ judge.
 
 | Input           | Default                     | Description |
 |----------------|-----------------------------|-------------|
-| `version`      | `1.7.0`                     | **Exact** version of `@vaultcompass/vault-guard`, validated against `^(0\|[1-9][0-9]*)\.(0\|[1-9][0-9]*)\.(0\|[1-9][0-9]*)$`. A dist-tag (`latest`, `next`, `beta`), a range, a prerelease, or a leading zero is refused, and so is anything below **1.7.0**, the oldest scanner this Action tag can drive. **On a pull request it may not go below the scanner this Action tag ships** (`1.7.0` today); pinning forward is still allowed there. The default is the scanner this Action tag shipped with; leaving the input out is the recommended shape. |
+| `version`      | `1.8.0`                     | **Exact** version of `@vaultcompass/vault-guard`, validated against `^(0\|[1-9][0-9]*)\.(0\|[1-9][0-9]*)\.(0\|[1-9][0-9]*)$`. A dist-tag (`latest`, `next`, `beta`), a range, a prerelease, or a leading zero is refused, and so is anything below **1.7.0**, the oldest scanner this Action tag can drive. **On a pull request it may not go below the scanner this Action tag ships** (`1.8.0` today); pinning forward is still allowed there. The default is the scanner this Action tag shipped with; leaving the input out is the recommended shape. |
 | `path`         | `.`                         | Subdirectory to scan, relative to workspace root. Must not begin with `-`, contain `..`, or resolve outside the workspace through a symlink. |
 | `format`       | `sarif`                     | `sarif`, `json`, or `text`. |
 | `sarif-output` | `vault-guard-results.sarif` | Output file path **under** `GITHUB_WORKSPACE`. May not resolve under `.github/`, and may not resolve through a symlink at the file or at any directory on the way to it. |
@@ -133,12 +135,13 @@ automation looks.
 The floor above is about flag compatibility, so it admits everything at or above
 1.7.0 — it is not the control for which scanner judges a pull request. On a
 same-repo `pull_request` event GitHub runs the workflow file from the head, so
-`version:` is written by the pull request being judged. Today exactly one
-published version clears the floor, so nothing can be chosen; the day a 1.8.0
-scanner ships with new rules, `version: 1.7.0` clears the floor and the change
-is judged by the older rules it picked for itself. That reads like version
-management in a diff, which is what makes it worse than deleting the step
-outright.
+`version:` is written by the pull request being judged. Before 1.8.0 shipped,
+exactly one published version cleared the floor, so nothing could be chosen;
+now that a 1.8.0 scanner exists with new rules, `version: 1.7.0` still clears
+the flag floor but is refused by the check below, so a pull request cannot pin
+back to it and be judged by the older rules it picked for itself. That would
+have read like version management in a diff, which is what makes it worse than
+deleting the step outright.
 
 **So on a pull-request event the Action refuses a `version` below the scanner
 the tag ships, and accepts anything at or above it.** Pinning forward is still
@@ -246,7 +249,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
-      - uses: vaultcompasshq/vault-guard@v1.7.4
+      - uses: vaultcompasshq/vault-guard@v1.8.0
         with:
           format: sarif
 ```
@@ -278,7 +281,7 @@ not a clean scan and must not be reported as findings either.
 
 ```yaml
 - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-- uses: vaultcompasshq/vault-guard@v1.7.4
+- uses: vaultcompasshq/vault-guard@v1.8.0
   id: vg
   with:
     format: text
@@ -315,7 +318,7 @@ of its own:
       # the step fails with a 403 that says nothing about the scan.
       security-events: write
     steps:
-      - uses: vaultcompasshq/vault-guard@v1.7.4
+      - uses: vaultcompasshq/vault-guard@v1.8.0
         id: vg
         with:
           format: sarif

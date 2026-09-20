@@ -205,7 +205,7 @@ assert_version_bad "1.7.00"
 # action.yml. Same number today, different meanings: MIN_* is flag
 # compatibility, TAG_SCANNER is the tested scanner this tag ships.
 TAG_SCANNER_MAJOR=1
-TAG_SCANNER_MINOR=7
+TAG_SCANNER_MINOR=8
 TAG_SCANNER_PATCH=0
 
 # Guard: every CONSTANT copied into this file still equals the one in
@@ -314,14 +314,17 @@ assert_pr_version_bad() {
 # Forward, and the scanner the tag ships. `1.10.0` is again the case a textual
 # comparison gets wrong, and here it would refuse the one direction this rule
 # deliberately leaves open.
-assert_pr_version_ok "1.7.0"
-assert_pr_version_ok "1.7.1"
 assert_pr_version_ok "1.8.0"
+assert_pr_version_ok "1.8.1"
 assert_pr_version_ok "1.10.0"
 assert_pr_version_ok "2.0.0"
 assert_pr_version_ok "10.20.30"
 
-# Backward, and the shapes the first check already refuses.
+# Backward, and the shapes the first check already refuses. 1.7.0 and 1.7.1
+# clear the flag floor (still 1.7.0) but are now below the tag scanner
+# (1.8.0), so the pull-request gate refuses them.
+assert_pr_version_bad "1.7.0"
+assert_pr_version_bad "1.7.1"
 assert_pr_version_bad "1.6.9"
 assert_pr_version_bad "1.6.0"
 assert_pr_version_bad "0.9.9"

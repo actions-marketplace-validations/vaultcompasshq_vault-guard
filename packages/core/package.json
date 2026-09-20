@@ -1,6 +1,6 @@
 {
   "name": "@vaultcompass/vault-guard-core",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "description": "Secret-scanning engine: vendor-anchored patterns, entropy gating, baselines, SARIF/JSON, hook helpers.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

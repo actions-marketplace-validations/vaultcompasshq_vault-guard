@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-09-19
+
+**Minor bump on all four packages.** `@vaultcompass/vault-guard`,
+`@vaultcompass/vault-guard-core`, `@vaultcompass/vault-guard-mcp` and
+`@vaultcompass/vault-guard-telemetry` move from 1.7.0 to 1.8.0 on npm. The
+Action's `version` default moves with them, to `1.8.0`, and the tag this
+release creates is `v1.8.0` -- tag and scanner are the same number again after
+1.7.1 through 1.7.4 moved the tag alone. A behaviour change in the fail-closed
+direction is why this is a minor rather than a patch.
+
 ### Security
 
 - **A whole-tree or target scan that examines zero files now exits 2
