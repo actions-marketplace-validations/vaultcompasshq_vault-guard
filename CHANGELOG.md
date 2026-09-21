@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.1] - 2026-09-20
+
 - The Validate inputs step now declares GITHUB_BASE_REF from the event
   payload in its env mapping, so the pull-request test cannot come from the
   workflow file even if the platform no-overwrite guarantee failed. The
