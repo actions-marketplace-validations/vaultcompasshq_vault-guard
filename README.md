@@ -258,7 +258,7 @@ jobs:
           # Required on pull requests: pull-request mode reads the config and
           # the baseline from the base branch, which a shallow clone does not have.
           fetch-depth: 0
-      - uses: vaultcompasshq/vault-guard@v1.8.0
+      - uses: vaultcompasshq/vault-guard@v1.8.1
         id: vault-guard
         with:
           path: .
