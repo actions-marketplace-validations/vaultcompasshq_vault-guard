@@ -59,7 +59,7 @@ describe('scan --staged reads git index', () => {
       `ANTHROPIC_API_KEY=${ANTHROPIC_KEY}\n`,
     );
     execSync('git add partial.env', { cwd: repo, stdio: 'ignore' });
-    // Worktree cleaned — index still has the secret.
+    // Worktree cleaned -- index still has the secret.
     fs.writeFileSync('partial.env', 'CLEAN=1\n');
 
     const code = await scanCommand('.', 'text', true);

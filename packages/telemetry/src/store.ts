@@ -145,7 +145,7 @@ function telemetrySaltPath(): string {
 
 /**
  * Per-machine random salt (32 bytes, hex-encoded on disk, mode `0600`).
- * Used only to hash `cwd` before persistence — not a secret, but treated as
+ * Used only to hash `cwd` before persistence -- not a secret, but treated as
  * private local state alongside `usage.sqlite`.
  */
 export function getOrCreateTelemetrySalt(): Buffer {
@@ -248,7 +248,7 @@ export interface SessionEventRow {
  * Privacy-respecting summary of `~/.vault-guard/usage.sqlite`.
  *
  * **What this intentionally does NOT expose:** raw `cwd` strings (which
- * include OS username and project names — see `docs/PRIVACY.md`),
+ * include OS username and project names -- see `docs/PRIVACY.md`),
  * `extra_json` payloads, model prompts, or token totals (those are already
  * available via `vault-guard statusline --json`).
  *
@@ -274,7 +274,7 @@ export interface DataStatusJson {
   earliest_event_iso: string | null;
   /** Latest `created_at` across both tables (ISO), or null when empty. */
   latest_event_iso: string | null;
-  /** Distinct non-null `cwd` values across both tables (count only — never the values). */
+  /** Distinct non-null `cwd` values across both tables (count only -- never the values). */
   distinct_cwd_count: number;
   /** Distinct non-null `model` values across both tables (count only). */
   distinct_model_count: number;
@@ -690,7 +690,7 @@ export class TelemetryStore {
   /**
    * Read all rows from `usage_events` ordered by `id ASC`.
    *
-   * Intended for `vault-guard data export`. Returns raw `cwd` strings — see
+   * Intended for `vault-guard data export`. Returns raw `cwd` strings -- see
    * {@link DataStatusJson} for the privacy-respecting alternative. Returns an
    * empty array (never throws) when the store is unavailable.
    */
@@ -740,7 +740,7 @@ export class TelemetryStore {
       dbSize = stat.size;
       lastWriteIso = stat.mtime.toISOString();
     } catch {
-      // File missing is a valid state — open() can create it; status reports it.
+      // File missing is a valid state -- open() can create it; status reports it.
     }
 
     const sidecars = getDbSidecarPaths(dbFilePath)

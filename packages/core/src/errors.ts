@@ -43,7 +43,7 @@ export class HookError extends VaultGuardError {
  * Error thrown when a `.vault-guard.json` config file cannot be read or parsed.
  *
  * Why this is a distinct error: silently falling back to defaults on a typo'd
- * config file is dangerous for a security tool — the user thinks their
+ * config file is dangerous for a security tool -- the user thinks their
  * `severity_overrides` / `extra_patterns` are honoured when they are not.
  * Callers (CLI, MCP) catch this, print the file path + parser message, and
  * exit non-zero so the user can fix the config rather than ship undetected.

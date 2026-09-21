@@ -1,7 +1,7 @@
 /**
  * Compute Shannon entropy (bits per character) for a string.
  *
- * High-entropy strings (≥ ~3.5 bits/char) look random — the hallmark of a
+ * High-entropy strings (≥ ~3.5 bits/char) look random -- the hallmark of a
  * generated secret.  Low-entropy strings (< 3.5 bits/char) are readable
  * words, git SHAs composed of a small alphabet, or repetitive padding.
  *

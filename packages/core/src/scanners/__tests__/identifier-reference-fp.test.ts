@@ -30,7 +30,7 @@ describe('unquoted identifier references are not secrets', () => {
     expect(scanner.scanContent(line).length).toBeGreaterThan(0);
   });
 
-  it('only suppresses unquoted values — a quoted identifier-shaped literal still fires', () => {
+  it('only suppresses unquoted values -- a quoted identifier-shaped literal still fires', () => {
     const quoted = scanner.scanContent(`api_key = "scheduledIngestApiKey"`);
     const unquoted = scanner.scanContent(`api_key = scheduledIngestApiKey`);
     expect(quoted.length).toBeGreaterThan(0);

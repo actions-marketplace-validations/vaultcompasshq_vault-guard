@@ -3,7 +3,7 @@ import type { SecretMatch } from './types';
 import type { Diagnostic } from './diagnostics';
 import { fingerprintForMatch } from './match-fingerprint';
 
-/** One file's scan outcome — shared by CLI, MCP, and SARIF/JSON formatters. */
+/** One file's scan outcome -- shared by CLI, MCP, and SARIF/JSON formatters. */
 export interface FileScanResult {
   file: string;
   matches: SecretMatch[];
@@ -332,7 +332,7 @@ export function formatJson(results: FileScanResult[], opts: FormatOptions = {}):
   return JSON.stringify(output, null, 2);
 }
 
-/** SARIF 2.1.0 — compatible with GitHub Code Scanning (upload-sarif action). */
+/** SARIF 2.1.0 -- compatible with GitHub Code Scanning (upload-sarif action). */
 export function formatSarif(results: FileScanResult[], opts: FormatOptions = {}): string {
   const fpCwd = opts.cwd === undefined ? process.cwd() : opts.cwd;
   const rules = [

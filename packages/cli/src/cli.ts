@@ -207,12 +207,12 @@ export function buildCli(): Command {
     .option(
       '--allow-env-fallback',
       'Permit fallback to ANTHROPIC_API_KEY when caller omits x-api-key. ' +
-        'Off by default — see SECURITY.md before enabling.',
+        'Off by default -- see SECURITY.md before enabling.',
       false,
     )
     .option(
       '--allow-public',
-      'Permit binding a non-loopback address. Off by default — exposing this ' +
+      'Permit binding a non-loopback address. Off by default -- exposing this ' +
         'proxy on the network combined with --allow-env-fallback is a credit-card ' +
         'draining footgun.',
       false,
@@ -270,7 +270,7 @@ export function buildCli(): Command {
       },
     );
 
-  // `data` parent command — inspects, exports, and resets the local
+  // `data` parent command -- inspects, exports, and resets the local
   // telemetry database at `~/.vault-guard/usage.sqlite`. No subcommand
   // shows help; this avoids an empty command landing.
   const dataCmd = program

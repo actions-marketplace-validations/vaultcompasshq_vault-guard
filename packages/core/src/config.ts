@@ -99,14 +99,14 @@ export function listConfigSearchDirs(startDir: string = process.cwd()): string[]
  *
  * Search policy (security-relevant):
  *   - If `startDir` is inside a git repository: search from `startDir` up to
- *     the repo root (inclusive). Never ascend past `.git` — a config in a
+ *     the repo root (inclusive). Never ascend past `.git` -- a config in a
  *     parent directory of the repo root could change what counts as a secret
  *     for the user (severity overrides, extra patterns) without their consent.
  *   - If `startDir` is NOT inside a git repository: search **only** `startDir`.
  *     This prevents accidental loading of `~/.vault-guard.json` (or any other
  *     ancestor) when the user runs the CLI in `/tmp` or similar.
  *
- * Throws `ConfigError` on JSON parse failure (do not fail silent — a typo in
+ * Throws `ConfigError` on JSON parse failure (do not fail silent -- a typo in
  * `.vault-guard.json` is indistinguishable from "no config" if we swallow it).
  */
 /**

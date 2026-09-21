@@ -111,7 +111,7 @@ function foreignHookConflict(
 ): InitConflict | undefined {
   const hook = new PreCommitHook();
 
-  // Manager-specific paths first — lefthook/precommit do not use getPreCommitHookPath
+  // Manager-specific paths first -- lefthook/precommit do not use getPreCommitHookPath
   // (that helper still resolves the native hooks dir for non-husky managers).
   if (manager === 'lefthook') {
     const localPath = path.join(cwd, 'lefthook-local.yml');
@@ -239,9 +239,9 @@ function conflictGuidance(c: InitConflict): string {
       if (c.path === '.vault-guard.json') {
         return `Your .vault-guard.json is kept as is; nothing was overwritten. ${TEST_TREE_DEFAULT_NOTE}`;
       }
-      return 'File already exists with different content — edit manually or move it aside, then re-run init.';
+      return 'File already exists with different content -- edit manually or move it aside, then re-run init.';
     case 'foreign_manifest':
-      return 'Existing .vault-guard/init-manifest.json is invalid or foreign — fix or remove it, then re-run.';
+      return 'Existing .vault-guard/init-manifest.json is invalid or foreign -- fix or remove it, then re-run.';
     case 'manifest_mismatch':
       return `This repo was initialised by an earlier vault-guard, so the manifest does not match the current templates. Nothing was overwritten. ${TEST_TREE_DEFAULT_NOTE} ${TRUST_BASE_UPGRADE_NOTE}`;
     case 'not_a_git_repository':
@@ -633,7 +633,7 @@ function printHuman(result: InitResult, options: InitOptions): void {
   }
 
   if (result.conflicts.length > 0) {
-    console.error(chalk.red.bold('❌ Init blocked — conflicts (no automatic overwrites):'));
+    console.error(chalk.red.bold('❌ Init blocked -- conflicts (no automatic overwrites):'));
     for (const c of result.conflicts) {
       console.error(chalk.white(`   ${c.path}`), chalk.gray(`(${c.reason})`));
       console.error(chalk.gray(`      → ${conflictGuidance(c)}`));
@@ -650,12 +650,12 @@ function printHuman(result: InitResult, options: InitOptions): void {
   }
 
   if (result.alreadyInitialized) {
-    console.log(chalk.green('✅ Already initialized — no changes needed'));
+    console.log(chalk.green('✅ Already initialized -- no changes needed'));
     return;
   }
 
   if (result.dryRun) {
-    console.log(chalk.blue('🔍 Dry-run — would apply:'));
+    console.log(chalk.blue('🔍 Dry-run -- would apply:'));
   } else {
     console.log(chalk.green.bold('✅ Vault Guard initialized'));
   }

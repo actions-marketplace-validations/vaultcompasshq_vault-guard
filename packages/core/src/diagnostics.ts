@@ -1,5 +1,5 @@
 /**
- * DiagnosticBus — lightweight structured error channel for vault-guard.
+ * DiagnosticBus -- lightweight structured error channel for vault-guard.
  *
  * Motivation (Audit §14): the codebase had pervasive `catch {}` silent swallows.
  * For a security tool, every silent fallback is an undetected miss:
@@ -54,7 +54,7 @@ export interface Diagnostic {
  * calls `bus.drain()` to retrieve them all and include them in JSON/SARIF
  * output and/or print a summary to stderr.
  *
- * Intentionally not a singleton — one bus per `scanCommand` / `proxyCommand`
+ * Intentionally not a singleton -- one bus per `scanCommand` / `proxyCommand`
  * invocation so that concurrent processes don't share state.
  *
  * @example

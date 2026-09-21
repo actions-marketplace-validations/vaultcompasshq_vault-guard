@@ -27,7 +27,7 @@ export interface DataStatusOptions {
  * - `yes` skips the interactive `y/N` prompt. Required for non-interactive
  *   contexts (CI, scripts).
  * - `dryRun` reports what would be deleted without touching the filesystem.
- * - `confirmFn` is a test seam — when omitted the command reads from stdin.
+ * - `confirmFn` is a test seam -- when omitted the command reads from stdin.
  */
 export interface DataResetOptions {
   yes?: boolean;
@@ -39,7 +39,7 @@ export interface DataResetOptions {
 
 /**
  * Options for {@link dataExportCommand}. `output` is the destination path
- * (a file; `-` is not currently supported — keeps the implementation honest
+ * (a file; `-` is not currently supported -- keeps the implementation honest
  * about file permissions and atomic writes).
  */
 export interface DataExportOptions {
@@ -73,7 +73,7 @@ export async function dataStatusCommand(options: DataStatusOptions = {}): Promis
         process.stdout.write(`${JSON.stringify(payload)}\n`);
       } else {
         process.stderr.write(
-          `vault-guard data status: telemetry unavailable — ${message}\n` +
+          `vault-guard data status: telemetry unavailable -- ${message}\n` +
             `expected db path: ${dbPath}\n`,
         );
       }
@@ -101,14 +101,14 @@ function printStatusHuman(s: DataStatusJson): void {
     `  db path           : ${s.db_path}`,
     `  db exists         : ${s.db_exists ? 'yes' : 'no'}`,
     `  db size           : ${sizeKb} KB`,
-    `  last write        : ${s.last_write_iso ?? '—'}`,
+    `  last write        : ${s.last_write_iso ?? ' -- '}`,
     `  usage events      : ${s.usage_events}`,
     `  session events    : ${s.session_events}`,
-    `  earliest event    : ${s.earliest_event_iso ?? '—'}`,
-    `  latest event      : ${s.latest_event_iso ?? '—'}`,
-    `  distinct cwd      : ${s.distinct_cwd_count} (count only — values redacted; see docs/PRIVACY.md)`,
+    `  earliest event    : ${s.earliest_event_iso ?? ' -- '}`,
+    `  latest event      : ${s.latest_event_iso ?? ' -- '}`,
+    `  distinct cwd      : ${s.distinct_cwd_count} (count only -- values redacted; see docs/PRIVACY.md)`,
     `  distinct models   : ${s.distinct_model_count}`,
-    `  last model        : ${s.last_model ?? '—'}`,
+    `  last model        : ${s.last_model ?? ' -- '}`,
   ];
   if (s.sidecars.length > 0) {
     lines.push('  sidecar files     :');
@@ -259,7 +259,7 @@ async function confirmReset(
  * Export the raw contents of `usage_events` and `session_events` to a file.
  *
  * **Privacy note:** unlike `data status`, the export includes the `cwd`
- * column as persisted (64-char **HMAC-SHA256** digests — not plaintext paths).
+ * column as persisted (64-char **HMAC-SHA256** digests -- not plaintext paths).
  * The user explicitly chose the output path; nothing is transmitted off-device.
  *
  * Returns the process exit code.
@@ -275,7 +275,7 @@ export async function dataExportCommand(options: DataExportOptions): Promise<num
     // an empty export file.
     if (!store.isAvailable()) {
       const message = store.getUnavailableReason() ?? 'better-sqlite3 native bindings unavailable.';
-      process.stderr.write(`vault-guard data export: telemetry unavailable — ${message}\n`);
+      process.stderr.write(`vault-guard data export: telemetry unavailable -- ${message}\n`);
       return 2;
     }
 

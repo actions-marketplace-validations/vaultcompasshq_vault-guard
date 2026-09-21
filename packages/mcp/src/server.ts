@@ -42,7 +42,7 @@ export interface McpServerOptions {
  * Build a scanner for the current MCP request.
  *
  * Policy: the MCP server runs as a stdio child of an editor / agent. If the
- * user has a typo in `.vault-guard.json` we must not take the host down —
+ * user has a typo in `.vault-guard.json` we must not take the host down  -- 
  * log to stderr (visible in the editor's MCP output channel) and fall back
  * to default config. The CLI surface, by contrast, hard-fails on
  * `ConfigError` because a human is at the terminal to read the message.
@@ -54,7 +54,7 @@ function loadMcpConfig(workspaceRoot: string): VaultGuardConfig {
   } catch (e) {
     if (e instanceof ConfigError) {
       process.stderr.write(
-        `vault-guard MCP: ignoring broken config at ${e.filePath} — ${e.message}\n`,
+        `vault-guard MCP: ignoring broken config at ${e.filePath} -- ${e.message}\n`,
       );
       cfg = {};
     } else {

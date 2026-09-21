@@ -39,7 +39,7 @@ async function waitForUpstreamInvoked(timeoutMs = 5000): Promise<void> {
   }
 }
 
-describe('proxy lifecycle — shutdown()', () => {
+describe('proxy lifecycle -- shutdown()', () => {
   // -------------------------------------------------------------------------
   // Fast path: no inflight requests
   // -------------------------------------------------------------------------
@@ -135,7 +135,7 @@ describe('proxy lifecycle — shutdown()', () => {
   // Idempotent
   // -------------------------------------------------------------------------
 
-  it('is idempotent — calling shutdown() twice has the same side-effects as once', async () => {
+  it('is idempotent -- calling shutdown() twice has the same side-effects as once', async () => {
     setupUpstreamMock(mockHttps);
     const checkpointSpy = jest.spyOn(TelemetryStore.prototype, 'closeAndCheckpoint');
 

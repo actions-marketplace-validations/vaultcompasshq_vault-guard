@@ -34,7 +34,7 @@ const VAULT_GUARD_HOOK_HEADER = '# vault-guard pre-commit (installed by @vaultco
 
 /**
  * Shell hook body for **native** Git hooks (`core.hooksPath` or `.git/hooks`).
- * Scans **staged files only** — fast and matches what will actually be committed.
+ * Scans **staged files only** -- fast and matches what will actually be committed.
  */
 const NATIVE_HOOK_SCRIPT = `#!/bin/sh
 ${VAULT_GUARD_HOOK_HEADER}
@@ -42,7 +42,7 @@ set -e
 
 # Re-attach stdin for GUI git clients when possible.
 # dash (Ubuntu /bin/sh) exits the whole shell on a failed \`exec </dev/tty\`
-# even with \`|| true\` / \`set +e\` — exit status 2. Probe in a subshell first;
+# even with \`|| true\` / \`set +e\` -- exit status 2. Probe in a subshell first;
 # only \`exec\` in the current shell when that open succeeds. \`[ -r /dev/tty ]\`
 # is not a usable guard: the node can exist and still fail open with ENXIO.
 if [ ! -t 0 ]; then
@@ -152,7 +152,7 @@ fi
 echo "✅ vault-guard: no secrets in staged files"
 `;
 
-const LEFTHOOK_LOCAL = `# Merged by Lefthook with lefthook.yml — added by vault-guard install-hook
+const LEFTHOOK_LOCAL = `# Merged by Lefthook with lefthook.yml -- added by vault-guard install-hook
 pre-commit:
   commands:
     vault-guard:
@@ -519,7 +519,7 @@ export class PreCommitHook {
   }
 
   // -------------------------------------------------------------------------
-  // Husky — .husky/pre-commit
+  // Husky -- .husky/pre-commit
   // -------------------------------------------------------------------------
 
   /**
@@ -645,7 +645,7 @@ export class PreCommitHook {
   }
 
   // -------------------------------------------------------------------------
-  // Lefthook — lefthook-local.yml (merged with lefthook.yml)
+  // Lefthook -- lefthook-local.yml (merged with lefthook.yml)
   // -------------------------------------------------------------------------
 
   private installLefthook(cwd: string): { success: boolean; message: string; hookPath?: string } {
@@ -688,7 +688,7 @@ export class PreCommitHook {
     if (content.replace(/\r\n/g, '\n').trim() !== LEFTHOOK_LOCAL.replace(/\r\n/g, '\n').trim()) {
       return {
         success: true,
-        message: 'lefthook-local.yml was edited — remove the vault-guard stanza manually',
+        message: 'lefthook-local.yml was edited -- remove the vault-guard stanza manually',
       };
     }
     try {
@@ -723,7 +723,7 @@ export class PreCommitHook {
       fs.writeFileSync(cfg, PRE_COMMIT_CONFIG, 'utf-8');
       return {
         success: true,
-        message: 'Created .pre-commit-config.yaml — run: pre-commit install',
+        message: 'Created .pre-commit-config.yaml -- run: pre-commit install',
         hookPath: cfg,
       };
     } catch (error) {

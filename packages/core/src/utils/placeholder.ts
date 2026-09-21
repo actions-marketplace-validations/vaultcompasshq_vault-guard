@@ -1,6 +1,6 @@
 /**
  * Recognise obviously non-secret placeholder / example / test values so that
- * broad patterns stop firing on documentation samples and unit-test fixtures —
+ * broad patterns stop firing on documentation samples and unit-test fixtures  -- 
  * empirically the dominant real-world false-positive source (e.g. AWS's own
  * documented `AKIAIOSFODNN7EXAMPLE` key, or `const password = 'testPass1234'`).
  *
@@ -8,7 +8,7 @@
  *
  *   - `standard` (safe for every pattern, including vendor-anchored keys):
  *     unambiguous markers that effectively never occur inside a real generated
- *     credential — `EXAMPLE`, `changeme`, `your_token_here`, all-`x` padding, …
+ *     credential -- `EXAMPLE`, `changeme`, `your_token_here`, all-`x` padding, …
  *
  *   - `aggressive` (opt-in, used only by the low-precision generic / password
  *     assignment patterns): additionally treats common test-fixture words
@@ -20,7 +20,7 @@
  * by chance.
  */
 
-/** Unambiguous placeholder markers — applied to all patterns. */
+/** Unambiguous placeholder markers -- applied to all patterns. */
 const STANDARD_MARKERS: readonly string[] = [
   'example',
   'changeme',
@@ -52,7 +52,7 @@ const STANDARD_MARKERS: readonly string[] = [
   // with real keys that merely contain a short repeated run.
 ];
 
-/** Common test / fixture markers — applied only to generic assignment patterns. */
+/** Common test / fixture markers -- applied only to generic assignment patterns. */
 const AGGRESSIVE_MARKERS: readonly string[] = [
   'test',
   'sample',
@@ -68,7 +68,7 @@ const AGGRESSIVE_MARKERS: readonly string[] = [
   'qwerty',
   'letmein',
   'your_', // your_google_places_key, your_api_key_here
-  'your-', // your-anthropic-api-key — hyphen form is just as common in docs
+  'your-', // your-anthropic-api-key -- hyphen form is just as common in docs
 ];
 
 /** Known vendor key prefixes whose remainder is often redacted with X/* in docs. */
@@ -156,7 +156,7 @@ export function isPemHeaderWithoutBody(content: string, headerEndOffset: number)
 
 /**
  * ALL_CAPS identifiers (e.g. `PLAID_TOKEN_ENCRYPTION_KEY`) are env-var names,
- * not secret values — common in GitHub Actions `secret:NAME` checks.
+ * not secret values -- common in GitHub Actions `secret:NAME` checks.
  */
 export function isEnvVarNameToken(value: string): boolean {
   return /^[A-Z][A-Z0-9_]{7,}$/.test(value);
@@ -164,7 +164,7 @@ export function isEnvVarNameToken(value: string): boolean {
 
 /**
  * True when an **unquoted** captured value is a reference to a code
- * identifier rather than a literal credential — e.g.
+ * identifier rather than a literal credential -- e.g.
  *
  *     headers: { 'x-api-key': scheduledIngestApiKey }
  *     api_key = defaultServiceCredential
@@ -318,7 +318,7 @@ const LOCAL_TLD_SUFFIXES: readonly string[] = [
 /**
  * Password tokens that are obviously defaults / placeholders rather than a
  * real secret. Matched case-insensitively against the password component of a
- * connection string. Deliberately scoped to the *password* — usernames like
+ * connection string. Deliberately scoped to the *password* -- usernames like
  * `admin` / `root` / `postgres` are extremely common in genuine leaks, so we
  * never suppress based on the username alone.
  */
@@ -332,13 +332,13 @@ const PLACEHOLDER_PASSWORDS: ReadonlySet<string> = new Set([
 
 /**
  * Return `true` when a database/Redis connection string is **not** a real
- * credential leak — i.e. it targets a local/dev/docker/example host, or uses
+ * credential leak -- i.e. it targets a local/dev/docker/example host, or uses
  * obvious placeholder/default credentials.
  *
  * The exploitable secret in a DSN is the password against a *reachable* host.
  * We suppress when either:
  *   1. the host is local, a bare docker-compose service name, or a reserved
- *      TLD (`localhost`, `mysql`, `db.local`, …) — not remotely reachable; or
+ *      TLD (`localhost`, `mysql`, `db.local`, …) -- not remotely reachable; or
  *   2. the password is a placeholder/default (`pass`, `PASSWORD`, `root:root`,
  *      `${DB_PASS}`, `<your-password>`, …).
  *
@@ -385,7 +385,7 @@ export function isNonSecretConnectionString(url: string): boolean {
   if (LOCAL_HOSTS.has(host)) return true;
   if (LOCAL_TLD_SUFFIXES.some(suffix => host.endsWith(suffix))) return true;
   // Bare single-token host with no dot (and not a raw IPv4) is a docker-compose
-  // service name (`mysql`, `db`, `postgres`) — local to a compose network.
+  // service name (`mysql`, `db`, `postgres`) -- local to a compose network.
   if (!host.includes('.') && !host.includes(':') && !/^\d+$/.test(host)) return true;
 
   // 2. Placeholder / default password.

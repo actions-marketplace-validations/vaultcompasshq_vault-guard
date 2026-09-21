@@ -243,7 +243,7 @@ export async function scanCommand(
     for (const ctx of extraPatternDiagnostics) {
       console.error(
         chalk.yellow('⚠️  extra_pattern rejected:'),
-        chalk.white(`${ctx.patternId} (${ctx.reason}) — ${ctx.detail}`),
+        chalk.white(`${ctx.patternId} (${ctx.reason}) -- ${ctx.detail}`),
       );
     }
     console.error(
@@ -306,7 +306,7 @@ export async function scanCommand(
       if (format === 'text') {
         console.log(chalk.blue('🔍 Scanning'), chalk.cyan('git staged files'));
         if (stagedFiles.length === 0) {
-          console.log(chalk.green.bold('✅ SUCCESS:'), chalk.white('Nothing staged — nothing to scan\n'));
+          console.log(chalk.green.bold('✅ SUCCESS:'), chalk.white('Nothing staged -- nothing to scan\n'));
           return 0;
         }
         console.log(chalk.gray(`   ${stagedFiles.length} file(s) in the index\n`));
@@ -457,7 +457,7 @@ export async function scanCommand(
     // Upgrade notice for the 1.4.0 default change. Before 1.4.0 any finding
     // failed the scan; now the implicit default is `medium`. When that
     // difference is what decides this run's outcome (findings exist, none
-    // block, and the user never chose a threshold), say so once on stderr —
+    // block, and the user never chose a threshold), say so once on stderr  -- 
     // stderr so JSON/SARIF stdout stays parseable, and only for the implicit
     // default so setting `fail_on` anywhere silences it for good.
     if (gateIsImplicitDefault && totalMatches > 0 && blocking === 0) {
@@ -500,7 +500,7 @@ export async function scanCommand(
     // Text mode: print one-line diagnostic summary when any non-fatal issues occurred
     if (diagnostics.length > 0) {
       console.error(
-        chalk.yellow(`⚠️  ${diagnostics.length} warning(s) — run with --json for details`),
+        chalk.yellow(`⚠️  ${diagnostics.length} warning(s) -- run with --json for details`),
       );
     }
 
@@ -601,11 +601,11 @@ export async function scanCommand(
     displayScanResults(results, blocking, outputBase);
 
     if (blocking === 0) {
-      // Findings exist but all sit below the gate. Say so explicitly — a silent
+      // Findings exist but all sit below the gate. Say so explicitly -- a silent
       // exit 0 after printing findings reads like a bug.
       console.log(
         chalk.white(
-          `${totalMatches} finding(s), none at or above severity "${failOn}" — not failing the gate.`,
+          `${totalMatches} finding(s), none at or above severity "${failOn}" -- not failing the gate.`,
         ),
       );
       console.log(

@@ -64,7 +64,7 @@ describe('getFilesToScan + ignore package', () => {
     fs.writeFileSync(path.join(root, 'pkg', 'src', 'x.tmp'), 'no\n', 'utf-8');
     fs.writeFileSync(path.join(root, 'noise.log'), 'no\n', 'utf-8');
 
-    // Scan from the repo ROOT, the normal `vault-guard scan .` case — the
+    // Scan from the repo ROOT, the normal `vault-guard scan .` case -- the
     // nested pkg/.gitignore should still apply to files under pkg/src/.
     const files = getFilesToScan(root).map(f => path.basename(f));
     expect(files).toContain('a.ts');

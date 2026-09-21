@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- The action hardening drift check pins the npm 10.5.2 floor comparisons, the version-shape regex and its occurrence count, `npm install` with `--ignore-scripts`, and the `npm audit signatures` statement. Each pin was proven by deleting the real line while comment copies survived: the test went red, the line was restored, and the test went green. The hygiene guard now names dep-guard, vault-guard, intent-guard, and conductor, and it fails a tracked em dash or en dash. README states the npm floor and the Node 20.13.0 remediation beside the action section, and links FINDINGS.md as the adopter feedback route.
+
 ## [1.8.1] - 2026-09-20
 
 - The Validate inputs step now declares GITHUB_BASE_REF from the event
@@ -65,8 +67,8 @@ stay at 1.7.0 on npm, and the Action's `version` default stays `1.7.0`.
   from the head, so the `version:` input is written by the pull request being
   judged. The existing floor does not close that: it is a FLAG-COMPATIBILITY
   floor (1.7.0 is when `--trust-base` arrived) and admits everything at or above
-  it. It has been shut by coincidence — exactly one published version satisfies
-  it — rather than by design.
+  it. It has been shut by coincidence -- exactly one published version satisfies
+  it -- rather than by design.
 
   On pull-request events the step now refuses a `version` below the scanner this
   Action tag ships, naming both numbers and pointing at the fix, which is to
@@ -308,7 +310,7 @@ that installs the scanner from inside the checkout. Move to `@v1.7.1`.
   symlink when the path ends in one, so `out.sarif/` walked past the symlink
   guard that `out.sarif` does not.
 - **`vault-guard init` scaffolds `@v1.7.1`, no `version` input, and the guarded
-  upload shape** — the scan step carries an `id`, and the `upload-sarif` step is
+  upload shape** -- the scan step carries an `id`, and the `upload-sarif` step is
   gated on its `results-file` output being non-empty and pinned to a full commit
   SHA rather than the mutable `v3` tag. The template's Action pin used to be
   derived from the CLI package version, which would have scaffolded the pre-fix
@@ -843,7 +845,7 @@ Guard at real code instead of its own fixtures.
 
 - **GitHub Action path validation on macOS.** `validate_path` used bash
   `=~` with `{1,256}`, which fails to compile where `RE_DUP_MAX` is 255
-  (macOS/BSD). Every path — including the default `.` — was rejected as
+  (macOS/BSD). Every path -- including the default `.` -- was rejected as
   invalid even with no secrets present. Charset is now checked with `+`
   plus an explicit length guard; CI runs the self-test on `macos-latest`.
 
@@ -1067,8 +1069,8 @@ The id stays as it is since baseline fingerprints include it.
 
 - **Release train:** `@changesets/cli`, lockstep versioning for all four published
   packages, `pnpm version-packages` / `pnpm release:next`, `CONTRIBUTING.md`
-  cadence policy (one minor every 2–4 weeks).
-- `.vault-guard.json` — ignore `fixtures/**`, `bench/fixtures/**`, `**/__tests__/**`
+  cadence policy (one minor every 2-4 weeks).
+- `.vault-guard.json` -- ignore `fixtures/**`, `bench/fixtures/**`, `**/__tests__/**`
   for pre-commit scans.
 
 ## [1.0.6] - 2026-06-11

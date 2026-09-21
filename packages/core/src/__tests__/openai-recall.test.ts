@@ -56,17 +56,17 @@ describe('OpenAI key detection recall', () => {
 
   describe('false positive guards', () => {
     it('does NOT flag a bare sk- identifier without watermark', () => {
-      // Short, no watermark — should not fire
+      // Short, no watermark -- should not fire
       expect(matchedRules('const sk = "sk-short123"')).not.toContain('openai');
     });
 
     it('does NOT flag sk- mid-word (token boundary)', () => {
-      // Embedded in an identifier — not a standalone key
+      // Embedded in an identifier -- not a standalone key
       expect(matchedRules('mysk-proj-config-value')).not.toContain('openai-project');
     });
 
     it('does NOT flag sk-proj- without the watermark', () => {
-      // Missing T3BlbkFJ — below threshold for watermark pattern
+      // Missing T3BlbkFJ -- below threshold for watermark pattern
       const fakeish = 'sk-proj-' + 'a'.repeat(40);
       expect(matchedRules(fakeish)).not.toContain('openai-project');
     });

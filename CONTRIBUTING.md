@@ -19,7 +19,7 @@ Local-only notes belong in gitignored paths: `TODO.local.md`, `.local/`, `audit.
 `docs/sessions/`, `docs/plans/`.
 
 Before opening a PR, search the diff for private product names and internal paths.
-CI runs `pnpm check:private-names` (hash blocklist — no plaintext codenames in the repo).
+CI runs `pnpm check:private-names` (hash blocklist -- no plaintext codenames in the repo; an em dash or an en dash in a tracked file fails the same check). `pnpm lint` is ESLint and does not scan for those dashes.
 
 ## Release train
 
@@ -29,7 +29,7 @@ All four published packages (`@vaultcompass/vault-guard`, `-core`, `-mcp`,
 ### Rules
 
 - One **minor** release every 2-4 weeks.
-- **Patches** only for security fixes or correctness regressions — not features.
+- **Patches** only for security fixes or correctness regressions -- not features.
 - No ad-hoc edits to `version` in `package.json`. Use the train.
 - **Do not reset to 0.x.** Stability comes from cadence, not renumbering.
 
@@ -101,10 +101,10 @@ Never bypass with `--no-verify`.
 
 ## CI gates (must pass before merge)
 
-- `test (22.x)` — full test suite + coverage
-- `lint` — ESLint
-- `bench` — precision/recall regression gate (`node bench/run.cjs --assert`)
-- `check:pack` — no source maps or test artifacts in any tarball
+- `test (22.x)` -- full test suite + coverage
+- `lint` -- ESLint
+- `bench` -- precision/recall regression gate (`node bench/run.cjs --assert`)
+- `check:pack` -- no source maps or test artifacts in any tarball
 
 Run the full suite locally before pushing:
 

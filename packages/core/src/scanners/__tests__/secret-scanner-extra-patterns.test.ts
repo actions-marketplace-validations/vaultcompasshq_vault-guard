@@ -1,7 +1,7 @@
 import { SecretScanner } from '../secret-scanner';
 import { REGEX_MAX_LENGTH } from '../../utils/regex-safety';
 
-describe('SecretScanner — extra_patterns (ReDoS guard)', () => {
+describe('SecretScanner -- extra_patterns (ReDoS guard)', () => {
   // ---------------------------------------------------------------------------
   // Happy path
   // ---------------------------------------------------------------------------
@@ -40,7 +40,7 @@ describe('SecretScanner — extra_patterns (ReDoS guard)', () => {
     expect(scanner.extraPatternRejections).toHaveLength(1);
     expect(scanner.extraPatternRejections[0].id).toBe('bad-pat');
     expect(scanner.extraPatternRejections[0].reason).toBe('nested_quantifier');
-    // Pattern must not be compiled — scanning with it should return no results
+    // Pattern must not be compiled -- scanning with it should return no results
     expect(scanner.scanContent('aaaaaaaaaaaaa')).toHaveLength(0);
   });
 
@@ -80,7 +80,7 @@ describe('SecretScanner — extra_patterns (ReDoS guard)', () => {
   // ---------------------------------------------------------------------------
 
   it('accepts a ReDoS-shaped pattern when extra_patterns_unsafe is true', () => {
-    // The heuristic is bypassed — only the length cap applies.
+    // The heuristic is bypassed -- only the length cap applies.
     // Note: we do NOT actually exec a pathological pattern here; just confirm
     // it compiles and appears in `patterns` (i.e. no rejection).
     const scanner = new SecretScanner({
@@ -106,7 +106,7 @@ describe('SecretScanner — extra_patterns (ReDoS guard)', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Multiple patterns — mix of valid and rejected
+  // Multiple patterns -- mix of valid and rejected
   // ---------------------------------------------------------------------------
 
   it('compiles valid patterns while rejecting bad ones from the same config', () => {

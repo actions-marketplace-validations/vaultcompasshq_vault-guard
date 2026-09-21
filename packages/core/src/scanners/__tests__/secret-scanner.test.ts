@@ -56,7 +56,7 @@ describe('SecretScanner', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // True positives — vendor-specific prefixes
+  // True positives -- vendor-specific prefixes
   // ---------------------------------------------------------------------------
 
   describe('vendor-specific patterns', () => {
@@ -214,7 +214,7 @@ describe('SecretScanner', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // False positives — none of these should fire
+  // False positives -- none of these should fire
   // ---------------------------------------------------------------------------
 
   describe('false positive suppression', () => {

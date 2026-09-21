@@ -1,12 +1,19 @@
 #!/usr/bin/env node
 /*
  * Public-repo hygiene guard: fail CI if tracked files contain tokens whose
- * SHA-256 (lowercased) matches the blocklist below. Plaintext venture codenames
- * are never stored in this repo — only hashes. To add an entry locally:
+ * SHA-256 (lowercased) matches the blocklist below, a machine path, or an
+ * em dash / en dash. Plaintext venture codenames are never stored in this
+ * repo -- only hashes. To add an entry locally:
  *
  *   node -e "const c=require('crypto');const t=process.argv[1];console.log(c.createHash('sha256').update(t.toLowerCase()).digest('hex'))" '<token>'
  *
- * Paste the hash into BANNED_HASHES. See CONTRIBUTING.md § Public repository hygiene.
+ * Paste the hash into BANNED_HASHES. See CONTRIBUTING.md, Public repository hygiene.
+ *
+ * UNION across the family (dep-guard, vault-guard, intent-guard, conductor):
+ * every repository's hygiene script carries the same hash blocklist, the
+ * same machine-path patterns, and the same em/en dash rule. The lists used
+ * to be maintained separately and three lists diverged; they are one list
+ * now, copied in full, and a new entry is added to every repository.
  */
 const crypto = require('node:crypto');
 const { execFileSync } = require('node:child_process');
@@ -15,7 +22,7 @@ const path = require('node:path');
 
 const ROOT = path.join(__dirname, '..');
 
-// SHA-256(lowercase token) — no plaintext codenames in the repository.
+// SHA-256(lowercase token) -- no plaintext codenames in the repository.
 const BANNED_HASHES = new Set([
   'bcbff8a223bdb66059e43ae951a28ed12598c9e782fb65c58dabcd347f65cabe',
   'ec4e8dbcdbe500197bb27e769cee7864c0a4b4876a604998a23c80bbcc979d4c',
@@ -41,6 +48,14 @@ const ALLOWLIST = new Set(['CONTRIBUTING.md', 'scripts/check-private-names.cjs']
 // any absolute /Users/<name>/... path running through a directory named
 // "projects" at any depth and in any case, rather than one fixed layout.
 const INTERNAL_PATH = /\/Users\/[^/\s]+\/(?:[^/\s]+\/)*[Pp]rojects\/[^/\s]+/;
+
+// Em dash (code point 0x2014) and en dash (code point 0x2013), built from
+// code points rather than typed as literal characters so this file itself
+// never contains one -- the guard should not need an exemption from its own
+// rule. Prose and commit messages are plain ASCII; either character is the
+// most common way a non-ASCII dash slips in from a pasted or generated
+// sentence. The allowlist exempts token and path scanning, not this rule.
+const DASH = new RegExp(`[${String.fromCodePoint(0x2014)}${String.fromCodePoint(0x2013)}]`);
 
 const TOKEN = /\b[a-z][a-z0-9]*(?:-[a-z0-9]+)*\b/gi;
 
@@ -88,17 +103,10 @@ function extractTokens(text) {
   return tokens;
 }
 
-const files = execFileSync('git', ['ls-files', '-z'], { cwd: ROOT, encoding: 'buffer' })
-  .toString('utf8')
-  .split('\0')
-  .filter(Boolean);
-
-let failed = false;
-
-for (const rel of files) {
-  if (rel.startsWith('node_modules/')) continue;
-
-  const allowlisted = ALLOWLIST.has(rel);
+// bannedHashes is injectable so a test can prove the hash-matching mechanism
+// with a made-up token, instead of needing a real banned plaintext.
+function scanFile(rel, text, { allowlisted, bannedHashes = BANNED_HASHES }) {
+  const findings = [];
 
   // The file's own path is visible on the public file tree whether or not
   // its contents are scanned, so this check runs even for allowlisted
@@ -108,45 +116,76 @@ for (const rel of files) {
   // would, and gets a distinct message so the two cases are
   // distinguishable in the output.
   for (const token of extractTokens(rel)) {
-    if (BANNED_HASHES.has(hashToken(token))) {
-      console.error(`✗ ${rel}: blocked token in file path (hash match)`);
-      failed = true;
+    if (bannedHashes.has(hashToken(token))) {
+      findings.push(`${rel}: blocked token in file path (hash match)`);
       break;
     }
   }
 
-  if (allowlisted) continue;
+  const lines = text.split('\n');
+  for (const [lineNum, line] of lines.entries()) {
+    if (DASH.test(line)) {
+      findings.push(`${rel}:${lineNum + 1}: em/en dash (non-ASCII) in tracked file`);
+    }
+  }
 
-  const abs = path.join(ROOT, rel);
-  let text;
-  try {
-    text = fs.readFileSync(abs, 'utf8');
-  } catch {
-    continue;
+  if (allowlisted) {
+    return findings;
   }
 
   const pathMatch = text.match(INTERNAL_PATH);
   if (pathMatch) {
     const line = text.slice(0, pathMatch.index).split('\n').length;
-    console.error(`✗ ${rel}:${line}: internal workspace path`);
-    failed = true;
+    findings.push(`${rel}:${line}: internal workspace path`);
   }
 
-  const lines = text.split('\n');
   for (const [lineNum, line] of lines.entries()) {
     for (const token of extractTokens(line)) {
-      if (BANNED_HASHES.has(hashToken(token))) {
-        console.error(`✗ ${rel}:${lineNum + 1}: blocked token (hash match)`);
-        failed = true;
+      if (bannedHashes.has(hashToken(token))) {
+        findings.push(`${rel}:${lineNum + 1}: blocked token (hash match)`);
       }
     }
   }
+
+  return findings;
 }
 
-if (failed) {
-  console.error('\ncheck-private-names: remove private portfolio references from tracked files.');
-  console.error('See CONTRIBUTING.md § Public repository hygiene.');
-  process.exit(1);
+function main() {
+  const files = execFileSync('git', ['ls-files', '-z'], { cwd: ROOT, encoding: 'buffer' })
+    .toString('utf8')
+    .split('\0')
+    .filter(Boolean);
+
+  let failed = false;
+
+  for (const rel of files) {
+    if (rel.startsWith('node_modules/')) continue;
+
+    const abs = path.join(ROOT, rel);
+    let text = '';
+    try {
+      text = fs.readFileSync(abs, 'utf8');
+    } catch {
+      text = '';
+    }
+
+    for (const finding of scanFile(rel, text, { allowlisted: ALLOWLIST.has(rel) })) {
+      console.error(`\u2717 ${finding}`);
+      failed = true;
+    }
+  }
+
+  if (failed) {
+    console.error('\ncheck-private-names: remove private portfolio references from tracked files.');
+    console.error('See CONTRIBUTING.md § Public repository hygiene.');
+    process.exit(1);
+  }
+
+  console.log('check-private-names: no private portfolio references in tracked files.');
 }
 
-console.log('check-private-names: no private portfolio references in tracked files.');
+if (require.main === module) {
+  main();
+}
+
+module.exports = { scanFile, hashToken };

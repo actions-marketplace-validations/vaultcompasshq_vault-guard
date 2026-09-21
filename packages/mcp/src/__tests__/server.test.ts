@@ -141,7 +141,7 @@ describe('createMcpServer', () => {
       try {
         fs.symlinkSync(outside, path.join(root, 'link'), 'dir');
       } catch {
-        return; // symlink creation not permitted (e.g. Windows CI) — nothing to test
+        return; // symlink creation not permitted (e.g. Windows CI) -- nothing to test
       }
       const client = await connect(createMcpServer({ telemetryFactory: fakeStore, workspaceRoot: root }));
       const res = await client.callTool({ name: 'report_token_usage', arguments: { paths: ['.'] } });

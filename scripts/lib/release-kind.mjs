@@ -10,11 +10,11 @@
 // that action tag ships. Those two numbers are allowed to come apart, the
 // same way dep-guard's did starting at its v0.6.1: action.yml, README,
 // CHANGELOG and docs move, the packages stay where they are. Ported from
-// dep-guard's scripts/lib/release-kind.mjs (see that repository's
-// docs/INVARIANTS.md, "The action tag and the scanner version are two
-// numbers", for the fuller history); this repository has no equivalent
-// invariants doc to extend, so the reasoning below and in
-// .github/workflows/release.yml's own comments is what stands in for one.
+// dep-guard's scripts/lib/release-kind.mjs. This repository's own statement
+// of the rule is docs/INVARIANTS.md, "The Action tag and the scanner
+// version are two numbers, and both get bumped". The reasoning below and
+// in .github/workflows/release.yml's own comments is the workflow-side
+// statement of that same rule.
 //
 // A release whose kind was decided by four lines of bash -- "the tag must
 // read v plus the package version or the run fails" -- only knows that one

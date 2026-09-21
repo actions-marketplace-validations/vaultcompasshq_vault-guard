@@ -21,14 +21,14 @@ interface PatternEntry {
   severity: SecretMatch['severity'];
   /**
    * Minimum Shannon entropy (bits/char) required for the raw matched value.
-   * If set and the match falls below the threshold the match is dropped —
+   * If set and the match falls below the threshold the match is dropped  -- 
    * this is the primary defence against false positives on broad patterns.
    */
   minEntropy?: number;
   /**
    * Apply the *aggressive* placeholder filter (test-fixture words such as
    * `test`, `password`, `sample`). Only set on low-precision generic /
-   * assignment patterns — vendor-anchored keys always use the standard filter
+   * assignment patterns -- vendor-anchored keys always use the standard filter
    * so recall on real credentials is unaffected.
    */
   aggressivePlaceholder?: boolean;
@@ -46,15 +46,15 @@ interface PatternEntry {
  * Vendor-specific patterns anchored to known prefixes / structures.
  *
  * Deliberately NOT included (too broad / not actual secrets):
- *   - cohere            (`[a-zA-Z0-9]{40}`)   — matches git SHAs, MD5s, …
- *   - aws-secret        (`[a-zA-Z0-9/+]{40}`) — matches any base-64-ish string
- *   - circleci-token    (`[a-zA-Z0-9_-]{40}`) — identical problem
- *   - jenkins-token     (`[a-zA-Z0-9]{32}`)   — matches MD5 hashes
- *   - kubernetes-token  (JWT)                 — merged into jwt-token
- *   - elasticsearch-url (`https://u:p@h:n`)   — matches any auth URL
- *   - ssh-rsa-public    / ssh-ed25519-public  — public keys are NOT secrets
- *   - google-analytics  / google-analytics-4  — publishable measurement IDs
- *   - twilio-account    (AC…)                 — public Account SID, not secret
+ *   - cohere            (`[a-zA-Z0-9]{40}`)   -- matches git SHAs, MD5s, …
+ *   - aws-secret        (`[a-zA-Z0-9/+]{40}`) -- matches any base-64-ish string
+ *   - circleci-token    (`[a-zA-Z0-9_-]{40}`) -- identical problem
+ *   - jenkins-token     (`[a-zA-Z0-9]{32}`)   -- matches MD5 hashes
+ *   - kubernetes-token  (JWT)                 -- merged into jwt-token
+ *   - elasticsearch-url (`https://u:p@h:n`)   -- matches any auth URL
+ *   - ssh-rsa-public    / ssh-ed25519-public  -- public keys are NOT secrets
+ *   - google-analytics  / google-analytics-4  -- publishable measurement IDs
+ *   - twilio-account    (AC…)                 -- public Account SID, not secret
  *
  * AWS secret access key is retained as a context-anchored pattern only.
  */
@@ -93,7 +93,7 @@ const BUILTIN_PATTERNS: ReadonlyMap<string, PatternEntry> = new Map([
   ['deepseek',       { regex: /(?:deepseek_api_key|DEEPSEEK_API_KEY)\s*[=:]\s*["']?(sk-[a-f0-9]{32})/g, severity: 'critical' }],
 
   // --- Payment processors ---
-  // NOTE: `sk_live_` / `sk_test_` are not unique to Stripe — Clerk uses the
+  // NOTE: `sk_live_` / `sk_test_` are not unique to Stripe -- Clerk uses the
   // same prefixes and there is no reliable discriminator in the key body, so a
   // Clerk secret key is reported under the `stripe` rule id. The finding is
   // correct (it IS a live secret key); only the vendor label may be wrong. The
@@ -176,7 +176,7 @@ const BUILTIN_PATTERNS: ReadonlyMap<string, PatternEntry> = new Map([
 
   // --- Monitoring ---
   ['newrelic-api',   { regex: /NRAK-[a-zA-Z0-9]{26}/g,                                          severity: 'critical' }],
-  // A Sentry DSN is designed to be embedded in client-side bundles — the
+  // A Sentry DSN is designed to be embedded in client-side bundles -- the
   // public key it carries only permits event ingestion, not data read. Kept at
   // `low` for visibility under the same policy as `gcp-oauth`: real, but not a
   // credential leak worth blocking a commit over.
@@ -188,7 +188,7 @@ const BUILTIN_PATTERNS: ReadonlyMap<string, PatternEntry> = new Map([
   // --- Keys and auth tokens ---
   // The algorithm prefix is optional. `-----BEGIN PRIVATE KEY-----` (PKCS#8)
   // has no prefix at all, and it is what modern OpenSSL emits by default and
-  // what GCP service-account JSON embeds — i.e. the most common private key
+  // what GCP service-account JSON embeds -- i.e. the most common private key
   // form in circulation. Requiring `[A-Z ]+` between BEGIN and PRIVATE meant
   // the scanner printed "No secrets found" on a bare PKCS#8 key file.
   // The optional key-type prefix lifts the space OUT of the repeated class
@@ -223,14 +223,14 @@ const BUILTIN_PATTERNS: ReadonlyMap<string, PatternEntry> = new Map([
   // standalone token reference, the same rule eight other entries here apply.
   ['jwt-token',      { regex: /(?<![A-Za-z0-9_-])eyJ[a-zA-Z0-9_-]{1,4096}\.[a-zA-Z0-9_-]{1,4096}\.[a-zA-Z0-9_-]{1,4096}/g, severity: 'high' }],
 
-  // Generic patterns — entropy-gated AND placeholder-filtered (aggressive) to
+  // Generic patterns -- entropy-gated AND placeholder-filtered (aggressive) to
   // suppress false positives on documentation samples and unit-test fixtures.
   ['bearer-token',   { regex: /Bearer [a-zA-Z0-9_-]{20,}/g,                                     severity: 'high',   minEntropy: 3.5, aggressivePlaceholder: true }],
   ['api-key-generic',{ regex: /api[_-]?key["']?\s*[:=]\s*["']?([a-zA-Z0-9_-]{20,})/gi,         severity: 'high',   minEntropy: 3.5, aggressivePlaceholder: true }],
   ['secret-generic', { regex: /secret["']?\s*[:=]\s*["']?([a-zA-Z0-9_-]{20,})/gi,               severity: 'high',   minEntropy: 3.5, aggressivePlaceholder: true }],
   // Negative lookbehind prevents matching when `password` is a suffix of a
   // compound identifier (e.g. `email-reset-password`, `changePassword`).
-  // Only standalone assignments trigger — `password =`, `password:`, etc.
+  // Only standalone assignments trigger -- `password =`, `password:`, etc.
   ['password-in-code',{ regex: /(?<![a-zA-Z0-9_-])password["']?\s*[:=]\s*["']([a-zA-Z0-9_\-!@#$%^&*]{12,})/gi, severity: 'high', minEntropy: 3.2, aggressivePlaceholder: true }],
 ]);
 
@@ -349,7 +349,7 @@ function isVendorAnchoredRule(id: string): boolean {
 
 /**
  * Read-only metadata for built-in patterns (docs / codegen). Exposes
- * `RegExp#source` and flags only — not live `RegExp` instances.
+ * `RegExp#source` and flags only -- not live `RegExp` instances.
  */
 export interface BuiltinPatternDocEntry {
   id: string;
@@ -414,7 +414,7 @@ export class SecretScanner {
     //
     // Security policy: every user-supplied regex passes through
     // `validateRegexSafety` (heuristic ReDoS check). Patterns that fail are
-    // **not** silently skipped — that is exactly the behaviour the audit
+    // **not** silently skipped -- that is exactly the behaviour the audit
     // flagged (Audit §14: silent error swallows). They are reported via
     // `extraPatternRejections` for the caller (CLI / MCP) to surface to the
     // user, then dropped.
@@ -583,7 +583,7 @@ export class SecretScanner {
           continue;
         }
 
-        // Suppress local/dev/example/placeholder connection strings — the
+        // Suppress local/dev/example/placeholder connection strings -- the
         // dominant FP source on real repos (docker-compose, `.env.example`,
         // test fixtures all carry `postgres://user:pass@localhost/db`).
         if (connectionString === true && isNonSecretConnectionString(fullMatch)) {
@@ -612,10 +612,10 @@ export class SecretScanner {
         }
 
         // Suppress unquoted assignments whose "value" is actually a function
-        // call — e.g. `csrf_secret = _add_new_csrf_cookie(request)`. The value
+        // call -- e.g. `csrf_secret = _add_new_csrf_cookie(request)`. The value
         // capture group stops at `(`, so a `(` immediately following the match
         // means we captured a callee identifier, not a literal secret. Scoped to
-        // the low-precision generic assignment patterns only — vendor-anchored
+        // the low-precision generic assignment patterns only -- vendor-anchored
         // and context-anchored detectors (incl. critical `aws-secret-context`)
         // are never weakened by this heuristic.
         if (
@@ -626,7 +626,7 @@ export class SecretScanner {
         }
 
         // Suppress unquoted assignments whose "value" is a bare reference to
-        // another identifier — e.g. `'x-api-key': scheduledIngestApiKey`. Only
+        // another identifier -- e.g. `'x-api-key': scheduledIngestApiKey`. Only
         // applies when the captured value was NOT wrapped in quotes: a quoted
         // string is a literal, and literals are what we are hunting. Scoped to
         // the low-precision generic assignment patterns.
@@ -776,9 +776,9 @@ export class SecretScanner {
    * Parse inline ignore directives from file content.
    *
    * Supported forms (case-insensitive):
-   *   `// vault-guard: ignore-line`        — ignores that line
-   *   `// vault-guard: ignore-next-line`   — ignores the following line
-   *   `# vault-guard: ignore-line`         — same, for shell/Python/YAML
+   *   `// vault-guard: ignore-line`        -- ignores that line
+   *   `// vault-guard: ignore-next-line`   -- ignores the following line
+   *   `# vault-guard: ignore-line`         -- same, for shell/Python/YAML
    *   `# vault-guard: ignore-next-line`
    *
    * Returns a Set of 1-based line numbers to ignore.
@@ -832,7 +832,7 @@ export class SecretScanner {
         const eEnd = eStart + existing.matchLength;
 
         // No possible overlap once we've passed the candidate start by more
-        // than the max pattern length (optimisation — safe upper bound: 512).
+        // than the max pattern length (optimisation -- safe upper bound: 512).
         if (eEnd < cStart - 512) break;
 
         const overlaps = cStart < eEnd && eStart < cEnd;
@@ -842,10 +842,10 @@ export class SecretScanner {
         const candidateRank = SEVERITY_RANK[candidate.severity];
 
         if (candidateRank > existingRank) {
-          // Candidate is more severe — replace existing.
+          // Candidate is more severe -- replace existing.
           kept.splice(i, 1);
         } else {
-          // Existing is at least as severe — drop candidate.
+          // Existing is at least as severe -- drop candidate.
           dominated = true;
           break;
         }
@@ -860,7 +860,7 @@ export class SecretScanner {
   /**
    * Redact a matched secret to a low-information identifier.
    *
-   * Format: `<prefix>…(<length>c)` — e.g. `sk-a…(37c)`.
+   * Format: `<prefix>…(<length>c)` -- e.g. `sk-a…(37c)`.
    *
    * Why not show more characters?
    *   - 4-char prefix is enough to identify vendor (sk-a, sk_l, ghp_, AKIA, …)
@@ -868,7 +868,7 @@ export class SecretScanner {
    *   - The exact location is already in `line` / `column`, so users don't
    *     need a longer fragment to find the match in source.
    *   - Output of this tool is routinely pasted into PRs, Slack, terminals,
-   *     SARIF uploads, and GitHub Code Scanning — the surface area for
+   *     SARIF uploads, and GitHub Code Scanning -- the surface area for
    *     leakage is large, so we keep the redaction conservative.
    *
    * For values shorter than 6 chars (rare; broad patterns enforce ≥20)
