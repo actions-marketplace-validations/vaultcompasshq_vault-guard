@@ -250,12 +250,12 @@ jobs:
 
     # npm Trusted Publishing (OIDC): no NPM_TOKEN; auth via id-token: write +
     # trusted publisher on each @vaultcompass/* package (workflow: release.yml).
-    # Requires npm CLI >= 11.5.1 (Node >= 22.14.0). Pin major 11 — npm@12 needs newer Node.
+    # Requires npm CLI >= 11.5.1 (Node >= 22.14.0). Pin major 11 -- npm@12 needs newer Node.
     - name: Upgrade npm for OIDC trusted publishing
       if: steps.kind.outputs.action_only == 'false'
       run: npm install -g npm@11
 
-    # Only @vaultcompass/* packages — never vault-guard-vscode (Marketplace via vsce).
+    # Only @vaultcompass/* packages -- never vault-guard-vscode (Marketplace via vsce).
     # Skip versions already on the registry so a failed mid-release can be re-run.
     - name: Publish to npm
       if: steps.kind.outputs.action_only == 'false'

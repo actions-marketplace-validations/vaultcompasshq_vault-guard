@@ -13,7 +13,7 @@ import {
 export async function configValidateCommand(cwd: string = process.cwd()): Promise<number> {
   const configPath = findVaultGuardConfigPath(cwd);
   if (!configPath) {
-    console.log(chalk.green('✓'), chalk.white('No Vault Guard config file in search path — nothing to validate.'));
+    console.log(chalk.green('✓'), chalk.white('No Vault Guard config file in search path -- nothing to validate.'));
     return 0;
   }
 
@@ -48,7 +48,7 @@ export async function configValidateCommand(cwd: string = process.cwd()): Promis
   if (scanner.extraPatternRejections.length > 0) {
     console.error(chalk.yellow('⚠'), chalk.white('Some extra_patterns were rejected and are not active:'));
     for (const r of scanner.extraPatternRejections) {
-      console.error(chalk.gray('  ·'), chalk.white(`${r.id}: ${r.reason} — ${r.detail}`));
+      console.error(chalk.gray('  ·'), chalk.white(`${r.id}: ${r.reason} -- ${r.detail}`));
     }
     return 1;
   }

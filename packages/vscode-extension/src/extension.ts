@@ -13,7 +13,7 @@ function mapSeverity(s: string): vscode.DiagnosticSeverity {
 
 /**
  * Load Vault Guard config, falling back to defaults on parse errors.
- * The extension host must not crash on a user config typo — surface the
+ * The extension host must not crash on a user config typo -- surface the
  * problem in the OUTPUT channel and continue scanning with built-in rules.
  */
 function safeLoadConfig(dir: string): ReturnType<typeof loadConfig> {

@@ -3,10 +3,10 @@ import { validateRegexSafety, validateRegexLength, REGEX_MAX_LENGTH } from '../u
 // ---------------------------------------------------------------------------
 // Smoke test: every built-in pattern must pass the heuristic.
 // If this test fails it means we tightened the heuristic and accidentally
-// broke our own detection rules — fix the heuristic, not the patterns.
+// broke our own detection rules -- fix the heuristic, not the patterns.
 // ---------------------------------------------------------------------------
 
-describe('validateRegexSafety — built-in pattern smoke test', () => {
+describe('validateRegexSafety -- built-in pattern smoke test', () => {
   // These are the exact regex sources from BUILTIN_PATTERNS in secret-scanner.ts.
   // If a pattern changes there, update it here too (and check it still passes).
   const builtinSources = [
@@ -61,7 +61,7 @@ describe('validateRegexSafety — built-in pattern smoke test', () => {
 // Rejection cases
 // ---------------------------------------------------------------------------
 
-describe('validateRegexSafety — rejections', () => {
+describe('validateRegexSafety -- rejections', () => {
   it('rejects a pattern longer than REGEX_MAX_LENGTH chars', () => {
     const longPattern = 'a'.repeat(REGEX_MAX_LENGTH + 1);
     const result = validateRegexSafety(longPattern);
@@ -108,16 +108,16 @@ describe('validateRegexSafety — rejections', () => {
 // Accepted edge cases
 // ---------------------------------------------------------------------------
 
-describe('validateRegexSafety — accepted patterns', () => {
+describe('validateRegexSafety -- accepted patterns', () => {
   it('accepts quantifier characters inside a character class without counting them', () => {
-    // [a-z?+*]{20,} — the ?, +, * are inside [] so must not count as quantifiers
+    // [a-z?+*]{20,} -- the ?, +, * are inside [] so must not count as quantifiers
     // Only the outer {20,} is a quantifier (the `{` character = 1 quantifier)
     const result = validateRegexSafety('[a-z?+*]{20,}');
     expect(result.ok).toBe(true);
   });
 
   it('accepts a realistic but complex pattern with many non-nested quantifiers', () => {
-    // A URL-ish pattern — each `+` / `*` is on a distinct non-overlapping class
+    // A URL-ish pattern -- each `+` / `*` is on a distinct non-overlapping class
     const result = validateRegexSafety('https?://[^:@]+:[^@]+@[^:/]+(?::\\d+)?/\\S+');
     expect(result.ok).toBe(true);
   });
@@ -130,7 +130,7 @@ describe('validateRegexSafety — accepted patterns', () => {
 });
 
 // ---------------------------------------------------------------------------
-// validateRegexLength — backstop even with unsafe flag
+// validateRegexLength -- backstop even with unsafe flag
 // ---------------------------------------------------------------------------
 
 describe('validateRegexLength', () => {

@@ -11,10 +11,10 @@ import {
  * Pattern IDs whose severity is downgraded to `low` in obvious test / fixture
  * paths. Two groups:
  *
- *   - Low-precision generic patterns (`password-in-code`, …) — common in test
+ *   - Low-precision generic patterns (`password-in-code`, …) -- common in test
  *     scaffolding and rarely real leaks there.
  *   - Connection strings and key/token shapes (`postgresql-url`,
- *     `ssh-private-key`, `jwt-token`, …) — test suites are full of throwaway
+ *     `ssh-private-key`, `jwt-token`, …) -- test suites are full of throwaway
  *     DSNs, fixture PEMs, and sample tokens. Downgrading (not suppressing)
  *     keeps them visible at `low` without drowning real criticals.
  *
@@ -72,7 +72,7 @@ const TEST_FILE_PATTERNS = [
   /_tests?\.rs$/,
 ];
 
-/** Env template basenames — never production secrets. */
+/** Env template basenames -- never production secrets. */
 const FIXTURE_ENV_BASENAME = /^\.env(\.[a-z0-9_-]+)*\.(example|sample|template)$/i;
 
 /**
@@ -109,7 +109,7 @@ const LOCALE_BASENAME = /^[a-z]{2}(?:[-_][A-Za-z]{2,4})?\.(json|ya?ml|ts|js|po|p
  *
  * These are entirely natural-language strings keyed by identifiers, so a key
  * such as `tfa_secret` or `api_key_label` puts a translated *label* where the
- * generic assignment patterns expect a value — `tfa_secret: Zwei-Faktor-
+ * generic assignment patterns expect a value -- `tfa_secret: Zwei-Faktor-
  * Authentifizierung` reads as a 29-character high-entropy secret. Translation
  * files never hold real credentials.
  */
@@ -153,7 +153,7 @@ export function isTestFilePath(filePath: string): boolean {
  * Rationale: password assignments, bearer tokens, and generic api-key patterns
  * are common in test scaffolding (`const password = 'Admin1234!'`) and are
  * rarely real leaked credentials in that context. Vendor-anchored patterns
- * (aws-access, anthropic, stripe, …) are unaffected — a real key in a test
+ * (aws-access, anthropic, stripe, …) are unaffected -- a real key in a test
  * file is still worth a `critical` alert.
  */
 function isLowPrecisionContextPath(filePath: string): boolean {

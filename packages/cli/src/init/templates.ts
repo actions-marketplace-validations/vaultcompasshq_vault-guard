@@ -8,8 +8,8 @@ export const INIT_TEMPLATE_VERSION = '4';
  * This used to read `v${readCliVersion()}`, and 1.7.1 is where that broke: it
  * is an action-only release, so the tag moved to v1.7.1 while the packages
  * stayed at 1.7.0. Deriving the pin from the package version would have
- * scaffolded `@v1.7.0` — the action that installs its scanner from inside the
- * tree it scans, which is the vulnerability 1.7.1 exists to close — into every
+ * scaffolded `@v1.7.0` -- the action that installs its scanner from inside the
+ * tree it scans, which is the vulnerability 1.7.1 exists to close -- into every
  * repository that ran `vault-guard init` after the release.
  *
  * Read the tag as "which version of the workflow step", not as "which version
@@ -145,7 +145,7 @@ export function mcpSnippetJson(): string {
 }
 
 export function agentRulesMarkdown(): string {
-  return `# Vault Guard — agent guardrails
+  return `# Vault Guard -- agent guardrails
 
 Vault Guard is the local secret scanner for this repository. Follow these rules
 before writing, editing, or committing code.

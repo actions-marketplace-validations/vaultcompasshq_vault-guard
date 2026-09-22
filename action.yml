@@ -374,7 +374,7 @@ runs:
         # segments (path traversal), no leading `/` (absolute escape), no
         # leading `-`.
         #
-        # Charset uses `+` plus an explicit length check — not `{1,256}`.
+        # Charset uses `+` plus an explicit length check -- not `{1,256}`.
         # macOS bash/BSD regex sets RE_DUP_MAX=255, so `{1,256}` fails to
         # compile and every path (including `.`) is rejected as invalid.
         validate_path() {

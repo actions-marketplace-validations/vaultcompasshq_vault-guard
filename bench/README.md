@@ -149,7 +149,7 @@ and exits 0 with an empty SARIF log.
 from tag `v1.7.0`, read out of git rather than committed, and the baseline
 records the attack succeeding there: the planted copy runs, the hostile registry
 is contacted, and the gate goes from red to green. A harness that reports the
-current action clean proves nothing on its own — it has to be shown catching the
+current action clean proves nothing on its own -- it has to be shown catching the
 attack on the action that had it. `--compare` fails just as loudly when a
 `v1.7.0` case stops showing the attack as when a `current` case starts.
 

@@ -97,7 +97,7 @@ and it fails closed under `set -eu`.
 
 WHAT IT DOES NOT DO, each measured rather than reasoned. It does not read the
 installed files: `pacote` refetches the manifest instead of hashing anything on
-disk, so a tampered install is invisible — appending a payload to the installed
+disk, so a tampered install is invisible -- appending a payload to the installed
 binary and re-running the command exits 0. It does not defeat a compromised
 registry, which signs what it serves. And a MISSING attestation is not a
 failure, only a missing or invalid signature is, so it does not require
@@ -110,7 +110,7 @@ far end of no edge. Without a manifest the audit covers the dependencies and
 SKIPS THE SCANNER, the one package the check exists for. Measured: 13 packages
 installed, 12 audited without it, 13 audited and 5 attestations with it. The
 first version of this step shipped without the manifest and recorded that 12 as
-evidence the check worked — the numbers disproved the claim in the same sentence
+evidence the check worked -- the numbers disproved the claim in the same sentence
 that made it, which is the failure this file exists to catch.
 
 KNOWN CONSEQUENCE OF FAILING CLOSED: a consumer whose runner points npm at a
@@ -125,7 +125,7 @@ recorded, and the audit comes after the install), the text guards in
 `action-path-validation.test.ts`, and `scripts/test-action-path-validation.sh`,
 which refuses ANY `npm install` line in the file lacking the flag. The jest
 suites run against a STUBBED npm, so they prove the action ASKS and say nothing
-about what a real npm does when asked — and that gap is precisely what hid the
+about what a real npm does when asked -- and that gap is precisely what hid the
 missing manifest, since the stub laid down an empty `lib` where the real command
 would have reported 12 of 13. Verified by hand against the registry at 1.7.0:
 two global installs of `@vaultcompass/vault-guard@1.7.0`, one with
@@ -160,7 +160,7 @@ blaming a `fetch-depth` the caller already set.
 **Enforced by:** the `SCAN_ROOT` guards in
 `packages/cli/src/__tests__/action/action-path-validation.test.ts` and
 `scripts/test-action-path-validation.sh`, and by the `filesScanned` field
-recorded per case in `bench/baseline.action-install.json` — a run that scans
+recorded per case in `bench/baseline.action-install.json` -- a run that scans
 nothing shows up there as a number, not as a passing test.
 
 ## The output path is checked as a path, not as a string
@@ -169,7 +169,7 @@ nothing shows up there as a number, not as a passing test.
 the string rules are not the whole check. It may not resolve under `.github/`,
 which holds the workflow file and the CODEOWNERS entry that decide how this gate
 runs, and it may not resolve through a symlink at the file or at any directory
-on the way to it — checked before `mkdir -p`, so a refused run has not already
+on the way to it -- checked before `mkdir -p`, so a refused run has not already
 created directories through the link.
 
 Every guard here compares strings, so every SECOND NAME for the same file has to
@@ -251,7 +251,7 @@ A dist-tag hands the choice of program to the registry on the morning of the
 run. A charset check is not enough on its own: npm's specifier parser reads a
 value beginning with `.` or ending in `.tgz` as a local path, so `.`, `..` and
 `payload.tgz` resolve against a directory instead of the registry, and a value
-that is not valid semver at all — `01.7.0`, `1.7.00` — falls back to being
+that is not valid semver at all -- `01.7.0`, `1.7.00` -- falls back to being
 treated as a dist-tag. The refusal message names the migration (`REMOVE the
 input`), because `latest` used to be the default and a refusal with no
 alternative in it is a wall.
@@ -290,7 +290,7 @@ The floor above is flag compatibility, and it is not the control for version
 choice: it admits everything at or above 1.7.0. On a same-repo `pull_request`
 event GitHub runs the workflow file from the HEAD, so `version:` is written by
 the pull request being judged. Once a second version exists, that is a bypass
-with an innocent shape — deleting a security step reads as deleting a security
+with an innocent shape -- deleting a security step reads as deleting a security
 step, while `version: 1.7.0` reads as version management.
 
 So on a pull-request event the step refuses a version BELOW the scanner this
@@ -367,8 +367,8 @@ else.
 **Enforced by:** the `pinning the scanner backward on a pull request` cases in
 `action-path-validation.test.ts`. Because the two floors are the same number
 today, no real input lands between them, so the behavioural cases drive the real
-step text with the tag-scanner constant advanced one minor version — the action
-as it will be the day a 1.8.0 scanner ships — and assert the replacement matched,
+step text with the tag-scanner constant advanced one minor version -- the action
+as it will be the day a 1.8.0 scanner ships -- and assert the replacement matched,
 so deleting the constant turns them red. Plus a drift case tying
 `VG_TAG_SCANNER_*`, the `version` input's default and
 `packages/cli/package.json` to one number, a case proving the flag floor answers
@@ -380,7 +380,7 @@ hand-copied still equals the one in `action.yml`.
 
 1.7.1 is the first release where they came apart: the tag moved, the four npm
 packages stayed at 1.7.0. They are allowed to differ, and an action-only release
-is the normal reason — publishing an identical scanner purely to keep two
+is the normal reason -- publishing an identical scanner purely to keep two
 strings matching burns a version through a one-way trusted-publisher path. What
 is not allowed is a document telling a reader to pin one number while an example
 next to it pins the other.
@@ -388,33 +388,33 @@ next to it pins the other.
 **The rule: when either number moves, grep for BOTH.** The places that carry one
 or the other, as of 1.7.1:
 
-- `action.yml`, the `version` input's `default:` — the SCANNER version
-- `action.yml`, `VG_TAG_SCANNER_MAJOR/MINOR/PATCH` — the SCANNER version again,
+- `action.yml`, the `version` input's `default:` -- the SCANNER version
+- `action.yml`, `VG_TAG_SCANNER_MAJOR/MINOR/PATCH` -- the SCANNER version again,
   as the constant the pull-request rule above compares against. It moves with
   the published packages, unlike `VG_MIN_*` next to it, which moves only when
   this tag starts passing a newer flag
-- `scripts/test-action-path-validation.sh`, `TAG_SCANNER_*` and `MIN_*` — the
+- `scripts/test-action-path-validation.sh`, `TAG_SCANNER_*` and `MIN_*` -- the
   bash 3.2 hand copy of both, which that script now checks against `action.yml`
   rather than trusting
 - `action.yml`, the `version` input's description, which names an example
-- `packages/*/package.json` (four packages) — the scanner version
-- `docs/GITHUB_ACTION.md`, the inputs table's `version` default — the scanner
-- `README.md`, the `uses: vaultcompasshq/vault-guard@vX.Y.Z` example — the TAG
-- `README.md`, the prose about which scanner a tag installs — both numbers
-- `docs/GITHUB_ACTION.md`, every `uses:` example — the tag
-- `packages/cli/src/init/templates.ts`, `ACTION_TAG` — the tag that
+- `packages/*/package.json` (four packages) -- the scanner version
+- `docs/GITHUB_ACTION.md`, the inputs table's `version` default -- the scanner
+- `README.md`, the `uses: vaultcompasshq/vault-guard@vX.Y.Z` example -- the TAG
+- `README.md`, the prose about which scanner a tag installs -- both numbers
+- `docs/GITHUB_ACTION.md`, every `uses:` example -- the tag
+- `packages/cli/src/init/templates.ts`, `ACTION_TAG` -- the tag that
   `vault-guard init` scaffolds into a generated workflow
 - `CHANGELOG.md`, the release heading and any migration line naming a tag
-- `bench/action-install.cjs`, `PRE_FIX_REF` — the tag the negative control reads
+- `bench/action-install.cjs`, `PRE_FIX_REF` -- the tag the negative control reads
   its vulnerable `action.yml` out of, which must stay the release BEFORE the fix
 - `packages/cli/src/init/templates.ts`, `UPLOAD_SARIF_SHA` and
-  `.github/workflows/ci.yml`'s `upload-sarif@` pin — one decision about which
+  `.github/workflows/ci.yml`'s `upload-sarif@` pin -- one decision about which
   third-party commit this project trusts, spelled in two files: the scaffold
   hands it to every consumer's repository, where it runs with that repository's
   `security-events: write`. `init.test.ts` reads the workflow and asserts the
   constant matches, so bumping one and not the other goes red rather than
   shipping a consumer a commit nobody here chose
-- `bench/baseline.action-install.json`, `scannerVersion` and the case ids —
+- `bench/baseline.action-install.json`, `scannerVersion` and the case ids  -- 
   the recorded run embeds both numbers, so a scanner bump or a new `PRE_FIX_REF`
   makes the baseline stale and `--compare` says so rather than a human noticing
 
@@ -426,7 +426,7 @@ initialised after the release. It is a constant now.
 **Enforced by:** `init.test.ts`, which asserts three things about that constant:
 the generated workflow pins it rather than anything derived from the package
 version; it is not BEHIND the package version by semver ordering (equal is legal
-— a package release moves both numbers together); and it equals `v` plus the
+ --  a package release moves both numbers together); and it equals `v` plus the
 newest `## [X.Y.Z]` heading in `CHANGELOG.md`, which is what catches a second
 action-only release that moved the tag and the changelog and forgot the
 scaffold. Plus the `defaults to the scanner version this repository publishes`
@@ -483,7 +483,7 @@ macOS runner the whole file is parsed by the bash version the claim is about.
 
 `"${BASH}"`, never a bare `bash`. A bare name is a PATH lookup, and on a machine
 with Homebrew bash ahead of `/bin` the check ran under bash 5 while the script
-itself ran under 3.2 — the one guard against bash 4 syntax performed by a bash
+itself ran under 3.2 -- the one guard against bash 4 syntax performed by a bash
 that accepts it. A review demonstrated it with a `;&` case fallthrough, which is
 legal in 4.0, a syntax error in 3.2, and passed the gate. That is
 the enforcement; the textual guards against `${x,,}` and `${x^^}` here and in

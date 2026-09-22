@@ -250,7 +250,7 @@ export interface ScanOptions {
   configIgnorePatterns?: string[];
   /**
    * When true, read each path from the git index (`git show :path`) so
-   * `--staged` matches what will actually be committed — including `AD`
+   * `--staged` matches what will actually be committed -- including `AD`
    * (added in index, deleted in worktree) and partially staged files.
    */
   fromGitIndex?: boolean;
@@ -686,7 +686,7 @@ export function scanFiles(
  * Why this layout:
  *   - Most modern terminals (iTerm2, Windows Terminal, VS Code, JetBrains)
  *     auto-link `path:line:col` so users can cmd/ctrl-click directly to the
- *     source — no copy-paste, no greppable secret value needed.
+ *     source -- no copy-paste, no greppable secret value needed.
  *   - Paths are relative to `base` for the same reason JSON/SARIF are: avoids
  *     leaking the developer's home dir / username when output is shared.
  *   - The redacted match value (`sk-a…(37c)`) is shown last and intentionally
@@ -737,7 +737,7 @@ export function displayScanResults(
 
   console.log('');
   if (willBlock) {
-    console.log(chalk.red.bold('❌ BLOCKED:'), chalk.white('Commit blocked — remove secrets before pushing\n'));
+    console.log(chalk.red.bold('❌ BLOCKED:'), chalk.white('Commit blocked -- remove secrets before pushing\n'));
   }
 }
 

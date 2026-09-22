@@ -308,8 +308,8 @@ describe('vault-guard init', () => {
     //
     // This test used to assert `v${readCliVersion()}`, and 1.7.1 is where that
     // became wrong: an action-only release moves the tag and leaves the
-    // packages alone, so the derived pin would have scaffolded `@v1.7.0` — the
-    // action that installs its scanner from inside the tree it scans — into
+    // packages alone, so the derived pin would have scaffolded `@v1.7.0` -- the
+    // action that installs its scanner from inside the tree it scans -- into
     // every repository that ran `vault-guard init` after the release. The tag
     // says which version of the workflow step; the package version says which
     // scanner. They are allowed to differ and here they do.
@@ -332,7 +332,7 @@ describe('vault-guard init', () => {
     // The staleness this cannot otherwise catch: a SECOND action-only release
     // moves the tag and the CHANGELOG, and nothing makes anybody open
     // templates.ts. The scaffold would then keep handing new repositories the
-    // previous Action — which for 1.7.1 specifically means the one that
+    // previous Action -- which for 1.7.1 specifically means the one that
     // installs its scanner from inside the tree it scans.
     //
     // The newest `## [X.Y.Z]` heading is the release this working tree
@@ -350,7 +350,7 @@ describe('vault-guard init', () => {
     // The generated workflow has to be the shape the docs tell people to write.
     // A bare `if: always()` upload fails the job on the empty file a
     // could-not-run scan leaves behind, with a SARIF parse error sitting on top
-    // of the real message — the exact confusion the non-empty `results-file`
+    // of the real message -- the exact confusion the non-empty `results-file`
     // output was added to remove.
     const yaml = githubWorkflowYaml();
     expect(yaml).toContain('id: vault-guard');

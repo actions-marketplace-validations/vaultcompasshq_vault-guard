@@ -27,7 +27,7 @@ export interface MockUpstreamOptions {
   body?: Buffer | string;
   /** Milliseconds before the response body is emitted (simulate slow upstream). */
   delayMs?: number;
-  /** If true, never emit 'end' — simulate a hung upstream. */
+  /** If true, never emit 'end' -- simulate a hung upstream. */
   hang?: boolean;
 }
 
@@ -161,7 +161,7 @@ export function postToProxy(
 }
 
 // ---------------------------------------------------------------------------
-// Temp DB helpers — each test suite gets a fresh isolated DB path
+// Temp DB helpers -- each test suite gets a fresh isolated DB path
 // ---------------------------------------------------------------------------
 
 /** Create a fresh temp dir and return a sqlite path inside it. */

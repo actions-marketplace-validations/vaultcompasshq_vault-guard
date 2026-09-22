@@ -311,6 +311,8 @@ committed file away from the tree handing over its own scanner. **If you were
 relying on the old `latest` default, remove the input**; a dist-tag is refused
 with a message saying so.
 
+The install step refuses npm older than **10.5.2**. Below that floor `npm audit signatures` reports a clean install of these packages as tampered, because the client's own bundled keys are stale. Installing Node 22 is not enough on its own: **Node 22.0.0 ships npm 10.5.1**. Node **20.13.0** and later, and 22.1.0 and later, carry a usable npm. The step checks the client it actually found and names that version when it refuses.
+
 Details: **[docs/GITHUB_ACTION.md](./docs/GITHUB_ACTION.md)**. Branch protection setup: **[docs/GITHUB_BRANCH_PROTECTION.md](./docs/GITHUB_BRANCH_PROTECTION.md)**.
 
 ### Pull requests: the rules come from the base branch
@@ -384,7 +386,7 @@ would ship with its own off switch on the untrusted side. Base-ref judging is
 the floor; the only kind of change the input accepts is a tightening. If you
 need 1.6.0 behaviour while you arrange `fetch-depth: 0`, stay pinned to
 `vaultcompasshq/vault-guard@v1.6.0` until you are ready, which is a choice a
-maintainer makes on a protected branch — knowing what it costs: **every tag
+maintainer makes on a protected branch -- knowing what it costs: **every tag
 before `@v1.7.1` installs its scanner with `npx` from inside the checkout**, so
 a pull request can choose the program that scans it. Pinning back trades that
 boundary for time on a one-line checkout change.
@@ -469,14 +471,14 @@ JSON Schema for editor autocomplete: **[schemas/vault-guard-config.json](./schem
 > `pull_request` event GitHub runs the workflow file from the pull request head,
 > so an off switch would be settable by the pull request it judges. If you are
 > not ready to change the checkout, stay pinned to
-> `vaultcompasshq/vault-guard@v1.6.0` until you are — but know the trade: every
+> `vaultcompasshq/vault-guard@v1.6.0` until you are -- but know the trade: every
 > tag before `@v1.7.1` installs its scanner from inside the checkout it scans,
 > so a pull request can choose the program that judges it.
 
 > **Also moving to `@v1.7.1`.** It is an action-only release: the tag moves, the
 > npm packages stay at 1.7.0. Two things change in a workflow. The `version`
 > input takes an EXACT version now and refuses a dist-tag, so **delete
-> `version: latest`** if you have it — the default is the scanner this tag
+> `version: latest`** if you have it -- the default is the scanner this tag
 > shipped with. And the `results-file` output is empty when the scan wrote no
 > document, so a chained `upload-sarif` should be guarded on it rather than run
 > unconditionally. Pinning `@v1.7.0` keeps the old Action, the one that installs
@@ -613,6 +615,8 @@ node bench/run.cjs
 ```
 
 ---
+
+Adopter feedback is a row in [FINDINGS.md](FINDINGS.md). How to change this repository is in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

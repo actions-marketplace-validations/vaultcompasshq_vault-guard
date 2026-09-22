@@ -21,7 +21,7 @@ export interface ScanTextFileOptions {
  *
  * Files larger than `maxFileBytes` are scanned **line-by-line** so the
  * process does not load the entire file into memory. Multi-line secrets
- * (e.g. PEM blocks split across lines) may be missed in that mode — the
+ * (e.g. PEM blocks split across lines) may be missed in that mode -- the
  * trade-off is intentional for very large text files.
  *
  * Line breaks are normalised to a single trailing `\n` per line for the

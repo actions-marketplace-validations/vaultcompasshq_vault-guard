@@ -51,7 +51,7 @@ code on the runner at install time, and the step then runs `npm audit
 signatures` over what it installed.
 
 **What that verification proves, and what it does not.** It asks the registry
-for each name and version in the tree — the scanner included — and checks the
+for each name and version in the tree -- the scanner included -- and checks the
 registry signature served back, so an unpublished, replaced or unsigned package
 fails the step. It does **not** read the installed files: npm refetches manifests
 rather than hashing anything on disk, so it will not detect a tampered install.
@@ -76,8 +76,8 @@ so it does not require provenance even though these packages publish it.
 > assumed. Node 20.13.0 and later, and 22.1.0 and later, carry a usable npm.
 >
 > **It needs a registry that serves `/-/npm/v1/keys`.** If your runner points
-> npm at a mirror or a proxy that does not — via `actions/setup-node`'s
-> `registry-url:`, a corporate `~/.npmrc`, or `npm_config_registry` — the
+> npm at a mirror or a proxy that does not -- via `actions/setup-node`'s
+> `registry-url:`, a corporate `~/.npmrc`, or `npm_config_registry` -- the
 > install will succeed and this step will then fail with
 > `EMISSINGSIGNATUREKEY`. A sigstore or TUF outage has the same effect.
 >
@@ -106,7 +106,7 @@ It used to be the default. Two reasons it is gone. A dist-tag means the program
 judging a pull request is whichever one the registry served that morning, rather
 than one decided in the workflow file and reviewable there. And npm's specifier
 parser reads `@scope/name@<value>` as a PATH when the value begins with a dot or
-ends in `.tgz`, so the old charset accepted `.`, `..` and `payload.tgz` — which,
+ends in `.tgz`, so the old charset accepted `.`, `..` and `payload.tgz` -- which,
 on a step that ran from inside the checkout, was one committed file away from
 the tree handing over its own scanner. **Remove the input** rather than pinning
 it: the default is already the right pin.
@@ -133,7 +133,7 @@ automation looks.
 ### On a pull request, `version` may not pin backward
 
 The floor above is about flag compatibility, so it admits everything at or above
-1.7.0 — it is not the control for which scanner judges a pull request. On a
+1.7.0 -- it is not the control for which scanner judges a pull request. On a
 same-repo `pull_request` event GitHub runs the workflow file from the head, so
 `version:` is written by the pull request being judged. Before 1.8.0 shipped,
 exactly one published version cleared the floor, so nothing could be chosen;
@@ -206,7 +206,7 @@ PR-controlled file is not.
 
 **What pinning back costs, stated plainly:** every tag before `@v1.7.1`,
 `@v1.6.0` included, installs the scanner with `npx` from inside the checkout, so
-a pull request can choose the program that scans it — with a committed `.npmrc`
+a pull request can choose the program that scans it -- with a committed `.npmrc`
 or a copy in its own `node_modules`. See [Where the scanner comes
 from](#where-the-scanner-comes-from). Adding `fetch-depth: 0` is a one-line
 change to a workflow file and gives up nothing; pinning back gives up that
@@ -272,8 +272,8 @@ parser returns for an unknown option, writing to stderr, which leaves nothing in
 the report. Exit 0 with no report is not a clean scan either: a clean scan
 prints its report, so nothing written means the scan did not happen.
 
-Only 0, 1 and 2 are verdicts. Anything else the step sees — including the 126
-and 127 the shell produces when a binary is missing or not executable — is
+Only 0, 1 and 2 are verdicts. Anything else the step sees -- including the 126
+and 127 the shell produces when a binary is missing or not executable -- is
 reported as could-not-run and re-raised as **2**, because a failed install is
 not a clean scan and must not be reported as findings either.
 
@@ -331,6 +331,6 @@ of its own:
 ```
 
 On `@v1.7.0` and earlier the output always named the file, empty or not, and the
-check had to be a shell step of its own reading `-s "${SARIF_FILE}"` — with the
+check had to be a shell step of its own reading `-s "${SARIF_FILE}"` -- with the
 path passed through `env` rather than substituted into the `run` body, for the
 same reason the base ref is.

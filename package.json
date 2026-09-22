@@ -1,7 +1,7 @@
 {
   "name": "@vaultcompass/vault-guard-monorepo",
   "version": "1.0.0",
-  "description": "Security and optimization layer for AI-native coding (workspace root — not published)",
+  "description": "Security and optimization layer for AI-native coding (workspace root -- not published)",
   "private": true,
   "scripts": {
     "build": "pnpm -r build",
