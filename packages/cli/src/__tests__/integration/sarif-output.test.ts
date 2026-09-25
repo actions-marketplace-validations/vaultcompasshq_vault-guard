@@ -6,7 +6,7 @@ import * as path from 'path';
 /**
  * Contract: `--format sarif` must write parseable SARIF JSON to stdout only.
  * A leading `--` in argv (forwarded by some npx invocations) must not disable
- * option parsing — otherwise text banners land in the SARIF file and GitHub
+ * option parsing -- otherwise text banners land in the SARIF file and GitHub
  * upload-sarif rejects it.
  */
 describe('CLI SARIF stdout contract', () => {

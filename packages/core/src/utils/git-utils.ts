@@ -134,7 +134,7 @@ export const STAGED_DIFF_ARGV: readonly string[] = [
  *
  * Uses `--diff-filter=ACMRT` so deleted index entries are excluded, but
  * **does not** require the path to exist in the worktree. A staged add that
- * was later deleted from disk (`AD` in `git status`) still appears — that
+ * was later deleted from disk (`AD` in `git status`) still appears -- that
  * blob will be committed and must be scanned.
  *
  * Three independent things keep `diff.relative` from deciding what the gate
@@ -161,7 +161,7 @@ export function getGitStagedFilePaths(cwd: string = process.cwd()): string[] {
     });
   } catch (err) {
     throw new GitError(
-      `Failed to list staged files — is this a git repository? (cwd: ${cwd})\n` +
+      `Failed to list staged files -- is this a git repository? (cwd: ${cwd})\n` +
         `Run 'git status' to verify.\nUnderlying error: ${String(err)}`,
       `git ${args.join(' ')}`,
       err,

@@ -40,7 +40,7 @@ function writeNested(relPath, content) {
 }
 
 // ---------------------------------------------------------------------------
-// Fixture definitions — parts joined at generation time
+// Fixture definitions -- parts joined at generation time
 // ---------------------------------------------------------------------------
 
 const fixtures = [
@@ -217,7 +217,7 @@ const fixtures = [
   },
   {
     file: 'remote-dsn.ts',
-    comment: 'True positive: remote PostgreSQL DSN — real host + real password (NOT local)',
+    comment: 'True positive: remote PostgreSQL DSN -- real host + real password (NOT local)',
     lines: (j) => [
       `// ${j.comment}`,
       `const PROD_DB = ${JSON.stringify(

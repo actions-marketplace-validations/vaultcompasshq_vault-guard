@@ -1,6 +1,6 @@
 {
   "name": "@vaultcompass/vault-guard-mcp",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "description": "Let Cursor and Claude scan AI-proposed edits for secrets before applying. Local MCP server.",
   "main": "dist/index.js",
   "bin": {

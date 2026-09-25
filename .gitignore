@@ -37,7 +37,7 @@ TODO.local.md
 docs/sessions/
 docs/plans/
 
-# Local AI configs — never commit (Vault & Compass convention).
+# Local AI configs -- never commit (Vault & Compass convention).
 .cursor/
 .claude/
 audit.md

@@ -138,7 +138,7 @@ function collectGitignoreChain(resolvedScan: string, stopAt: string): GitignoreC
           content: fs.readFileSync(absGitignore, 'utf-8'),
         });
       } catch {
-        /* unreadable .gitignore — treat as absent */
+        /* unreadable .gitignore -- treat as absent */
       }
     }
     if (dir === stop) break;
@@ -182,7 +182,7 @@ function collectDescendantGitignores(root: string): GitignoreChainEntry[] {
         try {
           found.push({ dir, absGitignore: full, content: fs.readFileSync(full, 'utf-8') });
         } catch {
-          /* unreadable .gitignore — treat as absent */
+          /* unreadable .gitignore -- treat as absent */
         }
       }
     }

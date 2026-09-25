@@ -7,6 +7,315 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- The action hardening drift check pins the npm 10.5.2 floor comparisons, the version-shape regex and its occurrence count, `npm install` with `--ignore-scripts`, and the `npm audit signatures` statement. Each pin was proven by deleting the real line while comment copies survived: the test went red, the line was restored, and the test went green. The hygiene guard now names dep-guard, vault-guard, intent-guard, and conductor, and it fails a tracked em dash or en dash. README states the npm floor and the Node 20.13.0 remediation beside the action section, and links FINDINGS.md as the adopter feedback route.
+
+## [1.8.1] - 2026-09-20
+
+- The Validate inputs step now declares GITHUB_BASE_REF from the event
+  payload in its env mapping, so the pull-request test cannot come from the
+  workflow file even if the platform no-overwrite guarantee failed. The
+  version-default drift tests now read that default from the version input
+  block, not from whichever default sits above path.
+
+## [1.8.0] - 2026-09-19
+
+**Minor bump on all four packages.** `@vaultcompass/vault-guard`,
+`@vaultcompass/vault-guard-core`, `@vaultcompass/vault-guard-mcp` and
+`@vaultcompass/vault-guard-telemetry` move from 1.7.0 to 1.8.0 on npm. The
+Action's `version` default moves with them, to `1.8.0`, and the tag this
+release creates is `v1.8.0` -- tag and scanner are the same number again after
+1.7.1 through 1.7.4 moved the tag alone. A behaviour change in the fail-closed
+direction is why this is a minor rather than a patch.
+
+### Security
+
+- **A whole-tree or target scan that examines zero files now exits 2
+  (could-not-run) instead of reporting a clean pass.** A plain `vault-guard
+  scan <path>` and a `--trust-base` (pull-request mode) scan both walk a
+  directory that is expected to hold content; if that walk resolves to no
+  files at all, the run has established nothing about the tree, and "No
+  secrets found" over nothing is a worse signal than no gate at all. Found in
+  the wild: a check script whose scan root resolved relative to its own
+  (relocated) location, rather than to the repository, scanned zero files
+  and sat green in a required check for two days before anyone noticed.
+  This guard catches the zero-file case specifically; a mis-resolved root
+  that still holds a stray scannable file (a README, a LICENSE) is not
+  caught here, so running the Action at the repository root, and its own
+  root canonicalization, remain the primary protection.
+
+  `--staged` is unaffected: an empty git index is an explicit empty scope
+  (the caller asked for "what's staged" and got a true "nothing"), and stays
+  a clean exit 0, same as before.
+
+  This also closes a second, narrower form of the config-mutation muting that
+  pull-request mode (`--trust-base`) already defends against: a config that
+  ignores literally everything (`"ignore": {"paths": ["**"]}}`) now makes an
+  ordinary local scan hit this same could-not-run, rather than silently
+  reporting clean, even without `--trust-base`.
+
+## [1.7.4] - 2026-09-18
+
+**An action-only release. The tag moves; the npm packages do not.** Nothing in
+the scanner changed, so `@vaultcompass/vault-guard` and the other three packages
+stay at 1.7.0 on npm, and the Action's `version` default stays `1.7.0`.
+`vaultcompasshq/vault-guard@v1.7.4` installs `@vaultcompass/vault-guard@1.7.0`.
+
+### Security
+
+- **A pull request can no longer pin the Action to an older scanner than the tag
+  ships.** On a same-repo `pull_request` event GitHub runs the workflow file
+  from the head, so the `version:` input is written by the pull request being
+  judged. The existing floor does not close that: it is a FLAG-COMPATIBILITY
+  floor (1.7.0 is when `--trust-base` arrived) and admits everything at or above
+  it. It has been shut by coincidence -- exactly one published version satisfies
+  it -- rather than by design.
+
+  On pull-request events the step now refuses a `version` below the scanner this
+  Action tag ships, naming both numbers and pointing at the fix, which is to
+  remove the input. Pinning **forward** is still accepted there, on an
+  assumption the rule does not enforce: that a newer scanner is at least as
+  strict. Forward pins are not bounded.
+
+  **Where it fires** is exactly where `GITHUB_BASE_REF` is set, which is
+  `pull_request` and `pull_request_target`. Push runs are out of scope and the
+  flag floor stays their only version gate. That is a scope statement, not a
+  safety argument: a push run on an unprotected feature branch runs that
+  branch's own workflow file, written by the same author, and is as
+  author-controlled as a pull request. It is not covered.
+
+  **This costs consumers nothing today.** The tag scanner equals the only
+  published scanner, `1.7.0`, so every workflow that clears the old floor on a
+  pull request clears this one too, and a workflow with no `version:` input was
+  never affected. It starts costing something the first time two versions exist:
+  after a 1.8.0 scanner ships, a workflow that pins `version: 1.7.0` will fail
+  its own pull-request runs with a message telling it to remove the input, while
+  its push runs keep working.
+
+  The constant it compares against, `VG_TAG_SCANNER_*`, is deliberately separate
+  from the flag floor's `VG_MIN_*` even though both read 1.7.0 today: one is the
+  oldest scanner this tag can drive, the other is the tested scanner it ships,
+  and a single constant is how raising one silently raises the other.
+
+  **What this does not cover:** forks, where the base repository's workflow file
+  runs, so a fork author never writes the `version:` that judges them (the rule
+  still fires on a fork pull request and judges the base workflow's own pin, so
+  a deliberate backward pin there refuses every fork run); and a pull request
+  that deletes the step or moves the `uses:` pin, for which branch protection
+  with required review on `.github/workflows/**` remains the control.
+
+## [1.7.3] - 2026-09-18
+
+**An action-only release. The tag moves; the npm packages do not.** Nothing in
+the scanner changed, so `@vaultcompass/vault-guard` and the other three packages
+stay at 1.7.0 on npm, and the Action's `version` default stays `1.7.0`.
+`vaultcompasshq/vault-guard@v1.7.3` installs `@vaultcompass/vault-guard@1.7.0`.
+
+### Fixed
+
+- **A floor on the npm client, so the Action cannot report a clean install as
+  tampered with.** `npm audit signatures`, added below, is not version-stable:
+  below npm **10.5.2** it fails on an untampered install of these very
+  packages, because the client's own bundled keys and TUF root are stale. On
+  10.5.0 it reports *"Someone might have tampered with these packages since
+  they were published on the registry!"*, naming ours; on 10.2.4 it is
+  `EEXPIREDSIGNATUREKEY`.
+
+  Bisected against a real install with a **cold cache and a fresh HOME**, so no
+  newer client could have primed the TUF root or the key set: 8.19.4, 9.9.4,
+  10.2.4, 10.5.0 and 10.5.1 fail; **10.5.2** and every later version pass, and
+  10.5.2 verifies the same package and attestation counts as current npm rather
+  than a reduced set.
+
+  The Action now refuses up front and names the npm it found, so a stale client
+  is reported as a stale client rather than as a supply-chain incident.
+
+  **`node-version: '22'` is not on its own sufficient**, which is why this
+  Action carries the floor despite installing its own Node. It is a major-only
+  spec and **Node 22.0.0 ships npm 10.5.1**, one patch below the floor;
+  `setup-node` satisfies a major from the runner's tool cache when it can. Node
+  20.13.0 and later, and 22.1.0 and later, carry a usable npm.
+
+  The comparison is written as *accept only if provably at or above the floor*
+  rather than *refuse if below it*. `[` returns 2 on a malformed comparison and
+  an `if` reads 2 as false, so a refuse-if-bad shape turns any arithmetic error
+  into permission to proceed. That is how the first two versions of this guard
+  failed open.
+
+### Security
+
+- **The Action no longer runs install scripts, and verifies what it installed.**
+  The install step ran `npm install -g` with no `--ignore-scripts`, on a runner
+  holding the job's token, so every package in the resolved tree had arbitrary
+  code execution there on every run. It now passes `--ignore-scripts`, which
+  costs nothing here: the only native dependency is `better-sqlite3`, it is an
+  optional dependency of the telemetry package, and the store degrades when its
+  bindings are missing.
+
+  Separately, the packages publish SLSA provenance attestations through the OIDC
+  trusted-publisher path, and nothing checked them. The step now runs
+  `npm audit signatures` over the installed tree, under `set -eu`, so a scanner
+  that cannot be verified fails the step rather than going on to render a
+  verdict.
+
+  What the verification proves, stated narrowly because the obvious summary is
+  wrong: it asks the registry for each name and version in the tree, the scanner
+  included, and checks the signature served back, so an unpublished, replaced or
+  unsigned package fails the step. It does **not** read the installed files, so
+  a tampered install is invisible to it; it does **not** defeat a compromised
+  registry, which signs what it serves; and a **missing** attestation is not a
+  failure, so it does not require provenance despite these packages publishing
+  it.
+
+  **This step needs a registry that serves `/-/npm/v1/keys`.** A runner pointed
+  at a mirror or proxy that does not, or a sigstore outage, installs fine and
+  then fails here with `EMISSINGSIGNATUREKEY`. It fails closed on purpose. Pin
+  to `@v1.7.2` if that blocks you; see `docs/GITHUB_ACTION.md`.
+
+  Reported by a consumer, which declined to add a second guard to its required
+  checks until this was closed.
+
+## [1.7.2] - 2026-09-16
+
+**An action-only release. The tag moves; the npm packages do not.** Nothing
+in the scanner changed, so `@vaultcompass/vault-guard` and the other three
+packages stay at 1.7.0 on npm, and the Action's `version` default stays
+`1.7.0`. `vaultcompasshq/vault-guard@v1.7.2` installs
+`@vaultcompass/vault-guard@1.7.0`.
+
+### Fixed
+
+- **A scan that never ran is no longer reported as findings.** The run step
+  mapped exit 1 straight to "vault-guard found secrets at or above the gate".
+  Commander, the CLI's argument parser, also exits 1 on an unknown option and
+  writes the message to stderr, so a repository whose scan failed at argument
+  parsing was told it was carrying secrets by a scanner that never scanned
+  anything. Found from a real gate run: an action pinned at v1.7.1 driving a
+  scanner pinned at 1.4.1, which predates `--trust-base`.
+
+  The step now requires a REPORT before it reads the exit code as a verdict.
+  Exit 1 with nothing written is could-not-run (exit 2), because findings would
+  have produced findings. The same guard closes the arm that failed OPEN: exit 0
+  with nothing written was reported as a clean scan, and it is a scan that did
+  not happen. A report with findings in it is still reported as findings.
+
+  This failed closed and was never a way past the gate. What it cost was trust
+  in the gate's own message, which is the faster way to teach a team to wave a
+  required check through.
+
+- **The `version` input is now checked against the flags this tag passes.** It
+  was validated for semver shape only, and the run step then passed
+  `--trust-base` regardless of which scanner it had just installed. Since the
+  input exists so a consumer can pin a scanner other than the one the tag
+  shipped with, version skew is a supported configuration that produced an
+  unsupported argument vector. The action declares the oldest scanner it can
+  drive, currently 1.7.0 because of `--trust-base`, and refuses anything below
+  it with a message naming both numbers and the flag.
+
+  A workflow pinning `version:` below 1.7.0 now fails at input validation with
+  an explanation instead of failing at the scan with an accusation. The fix in
+  nearly every case is to DELETE the input: the default is the scanner the tag
+  shipped with, and a `version:` that Dependabot does not move is a second pin
+  in a place no automation looks.
+
+## [1.7.1] - 2026-09-13
+
+**An action-only release. The tag moves; the npm packages do not.** Nothing in
+the scanner changed, so `@vaultcompass/vault-guard` and the other three packages
+stay at 1.7.0 on npm, and the Action's `version` default stays `1.7.0`, which is
+the scanner this Action tag installs and was tested against.
+
+That makes the Action tag and the scanner version two different numbers for the
+first time, and it is deliberate rather than an oversight:
+`vaultcompasshq/vault-guard@v1.7.1` installs
+`@vaultcompass/vault-guard@1.7.0`. Publishing an identical scanner as 1.8.0 so
+the two strings matched would burn a version number on a change that touches no
+scanning code, through a trusted-publisher path that is a one-way door.
+
+**Pinning `vaultcompasshq/vault-guard@v1.7.0` gets the OLD Action**, the one
+that installs the scanner from inside the checkout. Move to `@v1.7.1`.
+
+### Upgrading
+
+1. **Delete `version: latest` from your workflow.** The input takes an exact
+   version now and a dist-tag is refused, with a message saying to remove the
+   input. The default is the scanner this tag shipped with, which is the pin you
+   want. `vault-guard init` no longer scaffolds the input at all.
+2. **Guard a chained `upload-sarif` on the `results-file` output being
+   non-empty.** It is empty now when the scan wrote no document, which is what
+   exit 2 looks like. Previously the output named a zero-byte file and the
+   upload failed with a SARIF parse error sitting on top of the real message.
+
+### Security
+
+- **The Action installs the scanner from outside the tree it scans.** It ran
+  `npx --yes "@vaultcompass/vault-guard@${VG_VERSION}"` from inside the
+  checkout, which put the choice of program inside the tree under judgment by
+  two routes. An `.npmrc` committed by the head repoints the registry npx
+  fetches from. A copy of the package already in the head's `node_modules`,
+  from the workflow's own earlier install step, is what npx runs, with the
+  version pin acting only as a satisfaction check on a package the head wrote.
+  Either one lets a pull request choose the program that scans it, and the
+  second needs no registry at all. On a `pull_request` run that checkout is the
+  untrusted head, so this was the gate reading its config from the base branch
+  and then running a binary the head chose. The package is now installed
+  globally into a prefix under the runner temp, with npm started from the
+  runner temp rather than from the workspace, and called by absolute path.
+
+  Both routes are exercised against real npm by `bench/action-install.cjs`,
+  which runs the Action's own steps with two local registries, and records the
+  pre-fix Action from tag `v1.7.0` as a negative control: the attack has to be
+  visible there or the harness is not measuring anything.
+
+- **The scan path is absolute and resolved.** The step no longer starts inside
+  the checkout, so the scan root is built from `GITHUB_WORKSPACE` and passed
+  whole. It is resolved with `pwd -P`, because vault-guard resolves the
+  pull-request file set against its own process cwd: a logical path against a
+  resolved cwd puts every file in the head tree outside the scan target, and
+  the run scans zero files and reports a clean result over nothing. A `path`
+  input that resolves outside the workspace through a symlink is refused.
+
+### Changed
+
+- **`version` takes an exact version only, and defaults to the scanner version
+  the Action shipped with.** It accepted dist-tags and defaulted to `latest`. A
+  tag hands the choice of scanner to the registry on the morning of the run.
+  The old `[0-9A-Za-z.+-]{1,64}` charset also accepted values npm reads as a
+  PATH rather than a version, `.`, `..` and `payload.tgz` among them, and
+  values that are not semver at all such as `01.7.0`, which npm falls back to
+  treating as a dist-tag. **A workflow relying on the old `latest` default must
+  remove the input.**
+- **Only 0, 1 and 2 are verdicts.** Any other exit code from the run step,
+  including the 126 and 127 the shell produces when a binary is missing or not
+  executable, is reported as could-not-run and re-raised as 2 rather than
+  passed through as if the scanner had produced it.
+- **`results-file` is published only when the run wrote something**, and a new
+  `exit-code` output carries vault-guard's own code.
+- **Input validation.** No value may begin with a dash, rather than only the
+  ref: a path or a ref starting with `-` is read as an option by whichever
+  command it reaches. `trust-base: off` is refused in any capitalisation, so an
+  opt-out with a shift key in front of it is not an opt-out either.
+- **`sarif-output` may not resolve under `.github/`**, which holds the workflow
+  file and the CODEOWNERS entry that decide how this gate runs. Compared after
+  normalising `./` segments, doubled slashes and case to a fixed point, so
+  `./.github/x` and `.GitHub/x` are refused too. A `./` prefix stays legal on
+  every input.
+- **`sarif-output` may not resolve through a symlink**, at the file or at any
+  directory on the way to it, checked before the containing directories are
+  created rather than after. The head controls those, and a symlink there sends
+  the write outside the workspace.
+- **`sarif-output` must name a file.** A value that normalises to nothing or to
+  a single dot (`.`, `./`) is a directory, and is refused with the input's name
+  rather than left to fail as a shell redirect error deep in the run step. A
+  trailing slash is normalised away everywhere, because `test -L` follows a
+  symlink when the path ends in one, so `out.sarif/` walked past the symlink
+  guard that `out.sarif` does not.
+- **`vault-guard init` scaffolds `@v1.7.1`, no `version` input, and the guarded
+  upload shape** -- the scan step carries an `id`, and the `upload-sarif` step is
+  gated on its `results-file` output being non-empty and pinned to a full commit
+  SHA rather than the mutable `v3` tag. The template's Action pin used to be
+  derived from the CLI package version, which would have scaffolded the pre-fix
+  Action into every repository initialised after this release.
+
 ## [1.7.0] - 2026-09-06
 
 Minor bump on all four packages. **The rule: on a pull-request run, every
@@ -536,7 +845,7 @@ Guard at real code instead of its own fixtures.
 
 - **GitHub Action path validation on macOS.** `validate_path` used bash
   `=~` with `{1,256}`, which fails to compile where `RE_DUP_MAX` is 255
-  (macOS/BSD). Every path — including the default `.` — was rejected as
+  (macOS/BSD). Every path -- including the default `.` -- was rejected as
   invalid even with no secrets present. Charset is now checked with `+`
   plus an explicit length guard; CI runs the self-test on `macos-latest`.
 
@@ -760,8 +1069,8 @@ The id stays as it is since baseline fingerprints include it.
 
 - **Release train:** `@changesets/cli`, lockstep versioning for all four published
   packages, `pnpm version-packages` / `pnpm release:next`, `CONTRIBUTING.md`
-  cadence policy (one minor every 2–4 weeks).
-- `.vault-guard.json` — ignore `fixtures/**`, `bench/fixtures/**`, `**/__tests__/**`
+  cadence policy (one minor every 2-4 weeks).
+- `.vault-guard.json` -- ignore `fixtures/**`, `bench/fixtures/**`, `**/__tests__/**`
   for pre-commit scans.
 
 ## [1.0.6] - 2026-06-11

@@ -88,7 +88,7 @@ function scanFile(cmd, filePath) {
  * Run gitleaks on a single file.
  *
  * `--report-format json` alone writes the report to gitleaks' *default report
- * path*, not stdout — stdout only carries the ASCII banner and log lines. The
+ * path*, not stdout -- stdout only carries the ASCII banner and log lines. The
  * earlier version of this function parsed stdout, always failed, and silently
  * scored gitleaks at zero findings on every file (reported as "Recall 0.0%,
  * Grade F"). Always pass an explicit `--report-path` and read that file.
@@ -125,7 +125,7 @@ function gitleaksScanFile(filePath) {
 }
 
 function pct(n, d) {
-  if (d === 0) return '—';
+  if (d === 0) return ' -- ';
   return ((n / d) * 100).toFixed(1) + '%';
 }
 
@@ -153,7 +153,7 @@ const tools = [{ name: 'vault-guard', scan: f => scanFile(vgCmd, f) }];
 if (DO_GL) {
   const glOk = spawnSync('gitleaks', ['version'], { shell: true, encoding: 'utf-8' }).status === 0;
   if (glOk) tools.push({ name: 'gitleaks', scan: gitleaksScanFile });
-  else console.warn('[bench] gitleaks not found — skipping comparison.\n');
+  else console.warn('[bench] gitleaks not found -- skipping comparison.\n');
 }
 
 console.log(`\n${'='.repeat(64)}`);
@@ -236,7 +236,7 @@ for (const tool of tools) {
   console.log(`  TN          : ${TN}`);
   console.log(`  Precision   : ${pct(TP, TP + FP)}  (TP / (TP+FP))`);
   console.log(`  Recall      : ${pct(TP, TP + FN)}  (TP / (TP+FN))`);
-  console.log(`  F1          : ${f1Score > 0 ? (f1Score * 100).toFixed(1) + '%' : '—'}`);
+  console.log(`  F1          : ${f1Score > 0 ? (f1Score * 100).toFixed(1) + '%' : ' -- '}`);
   console.log(`  Grade       : ${toolGrade}`);
   if (wrongRuleRows.length > 0) {
     console.log();
@@ -244,7 +244,7 @@ for (const tool of tools) {
     for (const w of wrongRuleRows) console.log(`    - ${w}`);
   }
   if (tool.name !== 'vault-guard') {
-    console.log(`  NOTE        : scored on Vault Guard's own corpus — see caveat below.`);
+    console.log(`  NOTE        : scored on Vault Guard's own corpus -- see caveat below.`);
   }
   console.log();
 
@@ -259,7 +259,7 @@ console.log('  ' + '─'.repeat(62));
 console.log('  This corpus is a REGRESSION suite, not a generalization benchmark.');
 console.log('  Nearly every clean/ fixture was added in response to a specific');
 console.log('  false positive that was then fixed, so a high score here means');
-console.log('  "no known bug came back" — it does NOT estimate accuracy on');
+console.log('  "no known bug came back" -- it does NOT estimate accuracy on');
 console.log('  unseen code, and it must not be quoted as a headline metric.');
 if (DO_GL) {
   console.log();

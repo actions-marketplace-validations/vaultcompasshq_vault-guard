@@ -1,16 +1,41 @@
 #!/usr/bin/env bash
-# Self-test for action.yml path validation.
+# Self-test for action.yml input validation, run on BOTH ubuntu and macOS.
 #
-# Regression for macOS BSD regex RE_DUP_MAX=255: a bash `=~` pattern with
-# `{1,256}` fails to compile, so every path (including `.`) was rejected.
-# Keep charset + length checks portable across Linux and macOS bash.
+# The reason it runs on two platforms: macOS ships bash 3.2, and the two bugs
+# this file exists for are both invisible from Linux. A `=~` pattern with
+# `{1,256}` fails to COMPILE on the BSD regex engine (RE_DUP_MAX=255), so every
+# path including the default `.` was rejected while ubuntu CI stayed green. A
+# `${x,,}` case expansion is a bash 4.0 feature and a SYNTAX ERROR on 3.2, so
+# the whole step would fail to parse. Keep every idiom here portable.
+#
+# The jest suites under packages/cli/src/__tests__/action/ run the REAL step
+# scripts out of action.yml with npm stubbed, and bench/action-install.cjs runs
+# them against real npm. This file is the portability gate and the grep guards.
 set -euo pipefail
 
 # Anchored to this script rather than to the caller's cwd. The grep guards
 # below check the real action.yml, and a run from anywhere else used to check
 # whatever action.yml happened to sit in the current directory, which is a
 # guard that passes without having looked at the file it names.
-ACTION_YML="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/action.yml"
+SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ACTION_YML="$(cd "${SCRIPTS_DIR}/.." && pwd)/action.yml"
+
+INSTALL_STEP="Install vault-guard outside the workspace"
+RUN_STEP="Run vault-guard"
+
+# For the `bash -n` syntax checks below. Removed on exit, including on the
+# `exit 1` paths, so a failed run does not leave a directory behind.
+SYNTAX_DIR="$(mktemp -d)"
+trap 'rm -rf "${SYNTAX_DIR}"' EXIT
+
+# node reads action.yml through the same parser the jest suites and the dogfood
+# harness use. Every GitHub-hosted runner image ships node, so a missing one is
+# a broken environment rather than a reason to quietly skip the strongest checks
+# in this file.
+if ! command -v node >/dev/null 2>&1; then
+  printf 'node is required: this script asks action.yml about its own steps rather than grepping for them\n' >&2
+  exit 1
+fi
 
 validate_path() {
   local value="$1"
@@ -21,6 +46,9 @@ validate_path() {
     return 1
   fi
   if [[ "${value}" == /* ]]; then
+    return 1
+  fi
+  if [[ "${value}" == -* ]]; then
     return 1
   fi
   return 0
@@ -54,6 +82,7 @@ assert_bad "../etc"
 assert_bad "/etc/passwd"
 assert_bad "has space"
 assert_bad "semi;colon"
+assert_bad "-rf"
 assert_bad "$(printf 'a%.0s' {1..257})"
 
 # Guard: the old pattern must not be reintroduced. On macOS it fails to
@@ -63,12 +92,546 @@ if grep -nE '\[A-Za-z0-9\._/-\]\{1,256\}' "${ACTION_YML}" >/dev/null; then
   exit 1
 fi
 
+# Guard: no bash 4 only syntax anywhere outside a comment. `${x,,}` and
+# `${x^^}` parse on the ubuntu runner and are a syntax error on this one, which
+# is the same asymmetry as the regex above. Comments are skipped because the
+# comment at normalise_path names `${x,,}` to explain why it is not used.
+if grep -vE '^[[:space:]]*#' "${ACTION_YML}" | grep -nE '\$\{[A-Za-z_][A-Za-z0-9_]*(,,|\^\^)\}' >/dev/null; then
+  printf 'action.yml uses a bash 4 case expansion; macOS runners ship bash 3.2\n' >&2
+  exit 1
+fi
 
-# Guard: npx must not pass a bare `--` before `scan`. That separator is
-# forwarded into vault-guard argv; Commander then ignores `--format` and the
-# action tees text banners into the SARIF file.
-if grep -nE 'npx[^\n]*--[[:space:]]+scan' "${ACTION_YML}" >/dev/null; then
-  printf 'action.yml still uses `npx … -- scan` (breaks --format / SARIF upload)\n' >&2
+# --- version ----------------------------------------------------------------
+#
+# EXACT VERSIONS ONLY. A dist-tag hands the choice of scanner to the registry on
+# the morning of the run, and a value npm reads as a PATH rather than a version
+# (`.`, `..`, anything ending in `.tgz`) was, on a step that ran from inside the
+# checkout, one committed file away from the tree choosing its own scanner.
+
+# The floor below is the second half of the contract: shape is not capability.
+# The action passes `--trust-base` on pull-request runs, that flag arrived in
+# scanner 1.7.0, and an older scanner answers an unknown option with exit 1,
+# which is also its findings code. Kept in step with the `VG_MIN_*` values in
+# action.yml.
+#
+# This IS a hand-copied check rather than the real step, deliberately, so it can
+# run on the macOS runner's bash 3.2 where the jest harness does not reach. That
+# copy is also the hazard: it sat green while asserting the OPPOSITE of the
+# shipped action for `0.0.0` until the floor was mirrored here.
+MIN_MAJOR=1
+MIN_MINOR=7
+MIN_PATCH=0
+
+validate_version() {
+  local value="$1"
+  if [[ ! "${value}" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+    return 1
+  fi
+  local major="${BASH_REMATCH[1]}"
+  local minor="${BASH_REMATCH[2]}"
+  local patch="${BASH_REMATCH[3]}"
+  # Component by component, never textual: `1.10.0` sorts below `1.7.0` as a
+  # string and above it as a version.
+  if (( major < MIN_MAJOR )); then
+    return 1
+  elif (( major == MIN_MAJOR )); then
+    if (( minor < MIN_MINOR )); then
+      return 1
+    elif (( minor == MIN_MINOR )) && (( patch < MIN_PATCH )); then
+      return 1
+    fi
+  fi
+  return 0
+}
+
+assert_version_ok() {
+  if ! validate_version "$1"; then
+    printf 'expected OK for version %q\n' "$1" >&2
+    exit 1
+  fi
+}
+
+assert_version_bad() {
+  if validate_version "$1"; then
+    printf 'expected reject for version %q\n' "$1" >&2
+    exit 1
+  fi
+}
+
+assert_version_ok "1.7.0"
+assert_version_ok "10.20.30"
+# `1.10.0` is the one a textual comparison gets wrong, and this is the only
+# place the floor is exercised on bash 3.2.
+assert_version_ok "1.10.0"
+assert_version_ok "1.7.1"
+assert_version_ok "2.0.0"
+
+# Below the floor. `0.0.0` USED to be asserted OK here, and stayed green after
+# the action started refusing it, because this check is a copy rather than the
+# step itself.
+assert_version_bad "0.0.0"
+assert_version_bad "1.6.9"
+assert_version_bad "1.6.0"
+assert_version_bad "0.9.9"
+
+assert_version_bad ""
+assert_version_bad "latest"
+assert_version_bad "next"
+assert_version_bad "beta"
+assert_version_bad "1.7"
+assert_version_bad "^1.7.0"
+assert_version_bad "1.7.0-rc.1"
+assert_version_bad "."
+assert_version_bad ".."
+assert_version_bad "payload.tgz"
+assert_version_bad "-1.7.0"
+# Not semver, so npm does not read it as a version at all and falls back to
+# treating the spec as a dist-tag: the family this check exists to refuse.
+assert_version_bad "01.7.0"
+assert_version_bad "1.7.00"
+
+# --- pinning the scanner backward on a pull request --------------------------
+#
+# THE THIRD half of the contract, and a different rule from the floor above. On
+# a same-repo `pull_request` event GitHub runs the workflow file from the HEAD,
+# so `version:` is written by the pull request being judged. The floor admits
+# anything at or above 1.7.0, so the day a newer scanner ships with new rules, a
+# pull request can pin back to an older one, clear the floor, and be judged by
+# the rules it chose. On that one event the action refuses a version BELOW the
+# scanner the tag ships. Forward stays allowed: a newer scanner is not a weaker
+# one.
+#
+# TAG_SCANNER is a SEPARATE constant from MIN_* on purpose, in this file as in
+# action.yml. Same number today, different meanings: MIN_* is flag
+# compatibility, TAG_SCANNER is the tested scanner this tag ships.
+TAG_SCANNER_MAJOR=1
+TAG_SCANNER_MINOR=8
+TAG_SCANNER_PATCH=0
+
+# Guard: every CONSTANT copied into this file still equals the one in
+# action.yml, and is assigned there exactly once. A copy that drifts asserts the
+# opposite of the shipped action and stays green while it does it, which has
+# already happened here once.
+#
+# CONSTANTS ONLY, WHICH IS HALF THE DRIFT. The functions above are a hand-written
+# mirror of action.yml's comparison, and this guard says nothing about that
+# logic: splice a lexicographic compare into the real check in action.yml and
+# every assertion above stays green while the jest suites go red. A reviewer
+# demonstrated exactly that, on bash 3.2 and on bash 5. docs/INVARIANTS.md states
+# the same scope, that this file "asserts every constant it hand-copied". The
+# logic half is the separate drift check below, which runs the REAL extracted
+# step rather than the mirror.
+#
+# Exactly one assignment, not the first of several. `head -n 1` read whichever
+# came first, so a second assignment further down -- the one that would actually
+# be in effect -- could disagree with this file and never be seen.
+assert_action_constant() {
+  local name="$1"
+  local expected="$2"
+  local matches
+  local count
+  local found
+  matches="$(grep -oE "^[[:space:]]*${name}=[0-9]+" "${ACTION_YML}" || true)"
+  if [[ -z "${matches}" ]]; then
+    count=0
+  else
+    count="$(printf '%s\n' "${matches}" | grep -c . | tr -d '[:space:]')"
+  fi
+  if [[ "${count}" != "1" ]]; then
+    printf 'action.yml assigns %s %s times; this file needs exactly one assignment to compare against\n' \
+      "${name}" "${count}" >&2
+    exit 1
+  fi
+  found="$(printf '%s\n' "${matches}" | grep -oE '[0-9]+$')"
+  if [[ "${found}" != "${expected}" ]]; then
+    printf 'action.yml has %s=%s and this file has %s; the hand copy has drifted\n' \
+      "${name}" "${found}" "${expected}" >&2
+    exit 1
+  fi
+}
+
+assert_action_constant "VG_MIN_MAJOR" "${MIN_MAJOR}"
+assert_action_constant "VG_MIN_MINOR" "${MIN_MINOR}"
+assert_action_constant "VG_MIN_PATCH" "${MIN_PATCH}"
+assert_action_constant "VG_TAG_SCANNER_MAJOR" "${TAG_SCANNER_MAJOR}"
+assert_action_constant "VG_TAG_SCANNER_MINOR" "${TAG_SCANNER_MINOR}"
+assert_action_constant "VG_TAG_SCANNER_PATCH" "${TAG_SCANNER_PATCH}"
+
+# Takes the floor as arguments rather than reading a constant, so the cases
+# below can exercise the comparison against a HYPOTHETICAL future tag scanner.
+# Today the two floors are the same number and no real input lands between them,
+# so a test that only used TAG_SCANNER could not show the rule doing anything.
+#
+# Accept-only-if, like the action: `[` returns 2 on a malformed comparison and
+# an `if` reads 2 as false, so a refuse-if shape turns an arithmetic error into
+# permission.
+version_at_least() {
+  local value="$1"
+  local want_major="$2"
+  local want_minor="$3"
+  local want_patch="$4"
+  if [[ ! "${value}" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+    return 1
+  fi
+  local major="${BASH_REMATCH[1]}"
+  local minor="${BASH_REMATCH[2]}"
+  local patch="${BASH_REMATCH[3]}"
+  local ok=0
+  if (( major > want_major )); then
+    ok=1
+  elif (( major == want_major )); then
+    if (( minor > want_minor )); then
+      ok=1
+    elif (( minor == want_minor )) && (( patch >= want_patch )); then
+      ok=1
+    fi
+  fi
+  (( ok == 1 ))
+}
+
+# What the action does on a pull-request event: the flag floor first, then this.
+validate_version_pull_request() {
+  if ! validate_version "$1"; then
+    return 1
+  fi
+  version_at_least "$1" "${TAG_SCANNER_MAJOR}" "${TAG_SCANNER_MINOR}" "${TAG_SCANNER_PATCH}"
+}
+
+assert_pr_version_ok() {
+  if ! validate_version_pull_request "$1"; then
+    printf 'expected OK on a pull request for version %q\n' "$1" >&2
+    exit 1
+  fi
+}
+
+assert_pr_version_bad() {
+  if validate_version_pull_request "$1"; then
+    printf 'expected reject on a pull request for version %q\n' "$1" >&2
+    exit 1
+  fi
+}
+
+# Forward, and the scanner the tag ships. `1.10.0` is again the case a textual
+# comparison gets wrong, and here it would refuse the one direction this rule
+# deliberately leaves open.
+assert_pr_version_ok "1.8.0"
+assert_pr_version_ok "1.8.1"
+assert_pr_version_ok "1.10.0"
+assert_pr_version_ok "2.0.0"
+assert_pr_version_ok "10.20.30"
+
+# Backward, and the shapes the first check already refuses. 1.7.0 and 1.7.1
+# clear the flag floor (still 1.7.0) but are now below the tag scanner
+# (1.8.0), so the pull-request gate refuses them.
+assert_pr_version_bad "1.7.0"
+assert_pr_version_bad "1.7.1"
+assert_pr_version_bad "1.6.9"
+assert_pr_version_bad "1.6.0"
+assert_pr_version_bad "0.9.9"
+assert_pr_version_bad "latest"
+assert_pr_version_bad ""
+
+# The rule with a FUTURE tag scanner, which is the only way to see it act today:
+# with a 1.8.0 scanner shipped, `1.7.0` still clears the flag floor -- so a push
+# takes it -- and is refused on a pull request.
+assert_version_ok "1.7.0"
+if version_at_least "1.7.0" 1 8 0; then
+  printf 'a version below a 1.8.0 tag scanner was accepted on a pull request\n' >&2
+  exit 1
+fi
+if ! version_at_least "1.8.0" 1 8 0; then
+  printf 'the tag scanner itself was refused on a pull request\n' >&2
+  exit 1
+fi
+if ! version_at_least "1.10.0" 1 8 0; then
+  printf 'a pull-request pin ahead of the tag scanner was refused; the comparison is textual\n' >&2
+  exit 1
+fi
+
+# Guard: THE SHIPPED CHECK, not the mirror above, orders numerically.
+#
+# Everything above this line runs `version_at_least`, which is hand-written
+# here. It proves the mirror right and says nothing about action.yml. Splice a
+# lexicographic compare into the real check and this file stayed green on both
+# bash 3.2 and bash 5 while the jest suites went red, which is the drift the
+# constant guard cannot see.
+#
+# So extract the REAL "Validate inputs" step and run it, on the one input that
+# separates the two orderings. `1.10.0` sorts BELOW `1.8.0` as text and above it
+# as a version, so a textual compare refuses the forward pin this rule
+# deliberately leaves open, and this check goes red.
+#
+# The tag scanner is advanced to 1.8.0 in a COPY of action.yml, the same move
+# the jest suite makes with its `future` script: today the flag floor and the
+# tag scanner are the same number, so no real input lands between them and the
+# shipped file cannot show the rule acting at all. The substitution is asserted
+# to have matched, so renaming or deleting the constant turns this red rather
+# than quietly testing the unmodified file. The repository's own action.yml is
+# never written to.
+#
+# The environment is the step's own `env:` mapping from action.yml plus the two
+# values under test. A step that grows a variable this list does not set will
+# fail under `set -u` and be reported here as a refusal, with the step's output
+# printed, rather than passing silently.
+assert_shipped_pr_check_orders_numerically() {
+  local copy="${SYNTAX_DIR}/action-future.yml"
+  local script="${SYNTAX_DIR}/validate-future.sh"
+  local out
+
+  sed 's/^\([[:space:]]*\)VG_TAG_SCANNER_MINOR=[0-9][0-9]*$/\1VG_TAG_SCANNER_MINOR=8/' \
+    "${ACTION_YML}" > "${copy}"
+  if ! grep -qE '^[[:space:]]*VG_TAG_SCANNER_MINOR=8$' "${copy}"; then
+    printf 'could not advance VG_TAG_SCANNER_MINOR to 8 in the copy of action.yml; the constant was renamed or reshaped\n' >&2
+    exit 1
+  fi
+  if ! node "${SCRIPTS_DIR}/extract-action-step.cjs" "${copy}" "Validate inputs" run > "${script}"; then
+    printf 'could not extract the Validate inputs step from the future-scanner copy of action.yml\n' >&2
+    exit 1
+  fi
+
+  if out="$(GITHUB_BASE_REF=main \
+    VG_VERSION=1.10.0 \
+    VG_PATH=. \
+    VG_FORMAT=sarif \
+    VG_SARIF_OUTPUT=vault-guard-results.sarif \
+    VG_TRUST_BASE=auto \
+    "${BASH}" --noprofile --norc -eo pipefail "${script}" 2>&1)"; then
+    return 0
+  fi
+
+  printf 'the SHIPPED pull-request check refused version 1.10.0 against a 1.8.0 tag scanner. 1.10.0 is FORWARD of 1.8.0, so the comparison in action.yml is textual where it has to be numeric (or the step now reads an environment variable this check does not set)\n' >&2
+  printf '%s\n' "${out}" >&2
+  exit 1
+}
+
+assert_shipped_pr_check_orders_numerically
+
+# Guard: the action gates this on GITHUB_BASE_REF, which is the same event test
+# the run step uses for `--trust-base`. A rule that fired on every event would
+# break push builds that pin an older scanner on purpose.
+#
+# ANCHORED TO ONE REGION OF ONE STEP, AND BOTH ENDS MATTER.
+#
+# A grep over the whole of action.yml stays green with this gate deleted: the
+# run step tests GITHUB_BASE_REF the same way to build `--trust-base`, so the
+# guard finds that copy and reports the validate step's gate present. Extracting
+# the validate step is not enough either, because the validate step ITSELF tests
+# the variable again further down, when it checks the shape of the ref the run
+# step will pass. So the region is bounded at BOTH ends: it starts at the flag
+# floor's verdict and stops at `VG_PR_SCANNER_OK=0`, which is the window the
+# gate has to sit in. The jest case `writes the pull-request check
+# accept-only-if, after the flag floor` asserts the same two bounds, as
+# floorAt < gateAt < initAt.
+#
+# Both bounds were proved by deleting the gate and watching this go red. An
+# earlier draft of this guard bounded only the start, and the deletion sailed
+# through it on the validate step's own second use of the variable.
+VALIDATE_SCRIPT="${SYNTAX_DIR}/validate-shipped.sh"
+if ! node "${SCRIPTS_DIR}/extract-action-step.cjs" "${ACTION_YML}" "Validate inputs" run > "${VALIDATE_SCRIPT}"; then
+  printf 'action.yml has no step named Validate inputs\n' >&2
+  exit 1
+fi
+
+# From the flag floor's verdict down to the line that opens the pull-request
+# check, inclusive. awk exits at that line, so nothing below it is searched.
+VALIDATE_GATE_REGION="${SYNTAX_DIR}/validate-gate-region.sh"
+awk '/VG_TOO_OLD == 1/ { seen = 1 }
+     seen { print; if ($0 ~ /VG_PR_SCANNER_OK=0/) exit }' \
+  "${VALIDATE_SCRIPT}" > "${VALIDATE_GATE_REGION}"
+if ! grep -n 'VG_PR_SCANNER_OK=0' "${VALIDATE_GATE_REGION}" >/dev/null; then
+  printf 'could not bound the pull-request check in the Validate inputs step: the flag floor verdict or VG_PR_SCANNER_OK=0 has moved or gone, so this guard has nothing to anchor to\n' >&2
+  exit 1
+fi
+
+if ! grep -n 'n "${GITHUB_BASE_REF:-}"' "${VALIDATE_GATE_REGION}" >/dev/null; then
+  printf 'the pull-request scanner check in Validate inputs is no longer gated on GITHUB_BASE_REF; it would fire on push events too\n' >&2
+  exit 1
+fi
+
+# Guard: accept-only-if, not refuse-if. The flag has to start at 0 so an
+# arithmetic error refuses rather than permits.
+if ! grep -n 'VG_PR_SCANNER_OK=0' "${ACTION_YML}" >/dev/null; then
+  printf 'action.yml no longer starts the pull-request scanner check closed\n' >&2
+  exit 1
+fi
+
+# Guard: the refusal message has to carry the migration, because `latest` used
+# to be the default and every workflow that spelled it out has to change.
+if ! grep -n 'REMOVE the input' "${ACTION_YML}" >/dev/null; then
+  printf 'action.yml no longer tells a workflow pinned to `latest` what to do instead\n' >&2
+  exit 1
+fi
+
+# --- where the scanner comes from -------------------------------------------
+#
+# The vulnerability this replaced: `npx --yes "@vaultcompass/vault-guard@..."`
+# run with the checkout as its working directory. A committed `.npmrc` repoints
+# the registry npx fetches from, and a copy already in the head's node_modules
+# wins outright with the version pin degraded to a satisfaction check on a
+# package the head wrote.
+
+# Guard: npx must not come back, as an invocation. Matched at the start of a
+# line rather than as the word, because the comments necessarily name npx to
+# say why it is gone.
+if grep -nE '^[[:space:]]*npx\b' "${ACTION_YML}" >/dev/null; then
+  printf 'action.yml runs npx again; the scanner must be installed outside the checkout\n' >&2
+  exit 1
+fi
+
+# Guard: the install step, its global install, and its prefix under the runner
+# temp. All three: an install step that installed into the workspace would
+# satisfy a check for the step alone.
+if ! grep -n 'name: Install vault-guard outside the workspace' "${ACTION_YML}" >/dev/null; then
+  printf 'action.yml has no install step; the scanner would come from inside the tree it scans\n' >&2
+  exit 1
+fi
+if ! grep -n 'npm install -g --ignore-scripts "@vaultcompass/vault-guard@\${VG_VERSION}"' "${ACTION_YML}" >/dev/null; then
+  printf 'action.yml no longer installs the pinned scanner globally with --ignore-scripts\n' >&2
+  exit 1
+fi
+# The install runs on a runner holding the job's token, so no install in this
+# file may omit --ignore-scripts, and what arrives has to be verified before it
+# is trusted to render a verdict. Both are checked here as well as in the jest
+# suites because those run against a STUBBED npm: they prove the action asks,
+# and this proves the ask is still written down.
+if grep -nE '^[[:space:]]*npm install' "${ACTION_YML}" | grep -v -- '--ignore-scripts' >/dev/null; then
+  printf 'action.yml has an npm install without --ignore-scripts; the scanner is a control input and this step holds the job token\n' >&2
+  exit 1
+fi
+if ! grep -n 'npm audit signatures' "${ACTION_YML}" >/dev/null; then
+  printf 'action.yml no longer verifies the provenance of what it installed\n' >&2
+  exit 1
+fi
+if ! grep -nE 'npm_config_prefix: \$\{\{ runner\.temp \}\}/vault-guard-action' "${ACTION_YML}" >/dev/null; then
+  printf 'action.yml no longer installs under a prefix in the runner temp\n' >&2
+  exit 1
+fi
+
+# Guard: BOTH shell steps start outside the checkout. A composite step with no
+# working-directory runs at the workspace root, which is the head's own tree, so
+# npm would start with the pull request's .npmrc, manifest and lockfile under
+# its cwd.
+#
+# Asked of each STEP BY NAME, through the same parser the jest suites and the
+# dogfood harness use, rather than by counting occurrences in the file. A count
+# of exactly two is a guard that goes red the day somebody gives the validate
+# step a working-directory, which is a harmless change, and it cannot say WHICH
+# steps the two belong to, which is the only thing it was ever asked.
+assert_step_workdir() {
+  local step="$1"
+  local declared
+  if ! declared="$(node "${SCRIPTS_DIR}/extract-action-step.cjs" "${ACTION_YML}" "${step}" working-directory)"; then
+    printf 'action.yml has no step named %s\n' "${step}" >&2
+    exit 1
+  fi
+  if [[ "${declared}" != '${{ runner.temp }}' ]]; then
+    printf 'step %s must declare working-directory: ${{ runner.temp }}, found %q\n' "${step}" "${declared}" >&2
+    exit 1
+  fi
+}
+
+assert_step_workdir "${INSTALL_STEP}"
+assert_step_workdir "${RUN_STEP}"
+
+# Guard: every step script PARSES under the bash running this file.
+#
+# This is what makes the bash 3.2 claim real. The grep above catches the two
+# bash 4 idioms somebody is most likely to reach for, and a grep can only ever
+# catch the ones already on the list; `bash -n` catches whatever is actually
+# there. On a macOS runner the bash running this file is 3.2, which is the
+# version the claim is about, so this check is worth most exactly where the
+# behavioural suites do not run.
+#
+# "${BASH}" -n, NEVER a bare `bash -n`. A bare name is a PATH lookup, and a
+# machine with Homebrew bash ahead of /bin on PATH parses the file with bash 5
+# while this script itself runs under 3.2 -- so the one check that exists to
+# catch bash 4 syntax is performed by a bash that accepts it. A review proved
+# that with a `;&` case fallthrough: legal in 4.0, a syntax error in 3.2, and
+# the gate passed under /bin/bash. ${BASH} is the interpreter running this
+# script, so the parse and the claim are about the same program, and the failure
+# message prints that interpreter's own version rather than some other one's.
+assert_step_parses() {
+  local step="$1"
+  local script="${SYNTAX_DIR}/step.sh"
+  if ! node "${SCRIPTS_DIR}/extract-action-step.cjs" "${ACTION_YML}" "${step}" run > "${script}"; then
+    printf 'action.yml has no step named %s\n' "${step}" >&2
+    exit 1
+  fi
+  if ! "${BASH}" -n "${script}"; then
+    printf 'the run script of step %s does not parse under %s (bash %s)\n' "${step}" "${BASH}" "${BASH_VERSION}" >&2
+    exit 1
+  fi
+  # An expression inside a run body is pasted in as source text. The same
+  # expression in an env: mapping is the safe form and is checked elsewhere.
+  if grep -nE '\$\{\{' "${script}" >/dev/null; then
+    printf 'step %s interpolates a GitHub expression into a run body (command injection)\n' "${step}" >&2
+    exit 1
+  fi
+}
+
+assert_step_parses "Validate inputs"
+assert_step_parses "${INSTALL_STEP}"
+assert_step_parses "${RUN_STEP}"
+
+# Guard: the scanner is called by ABSOLUTE path. A bare name would be resolved
+# against PATH, and a workflow that put the checkout's node_modules/.bin on PATH
+# would hand the head's copy back the resolution the install step took away.
+if ! grep -nE 'VG_BIN: \$\{\{ runner\.temp \}\}/vault-guard-action/bin/vault-guard' "${ACTION_YML}" >/dev/null; then
+  printf 'action.yml no longer calls the installed scanner by absolute path\n' >&2
+  exit 1
+fi
+
+# Guard: the scan path must be absolute too, and the two halves are
+# inseparable. The step starts in the runner temp, so a relative `.` would
+# resolve against the wrong directory entirely.
+#
+# And RESOLVED, with `pwd -P`. vault-guard resolves the pull-request file set
+# against its own process cwd, which node reports with symlinks resolved, while
+# bash `cd` keeps the logical path: a logical target against a resolved cwd puts
+# every file in the head tree outside the scan target, and the run scans zero
+# files and reports a clean result over nothing. Silent on a Linux runner, whose
+# workspace path is canonical already, which is why it is pinned here rather
+# than left to a behavioural test on ubuntu.
+if ! grep -n 'SCAN_ROOT="$(cd "${ROOT}/${VG_PATH}" && pwd -P)"' "${ACTION_YML}" >/dev/null; then
+  printf 'action.yml no longer builds an absolute, resolved scan root from GITHUB_WORKSPACE\n' >&2
+  exit 1
+fi
+
+# Guard: and the resolved scan root has to still be inside the checkout, which
+# the string rules cannot decide. The head controls the directories its path
+# names point at, so a committed symlink is a second name for somewhere else.
+if ! grep -n 'resolves outside the workspace, through a symlink' "${ACTION_YML}" >/dev/null; then
+  printf 'action.yml no longer checks that the resolved scan root is inside the workspace\n' >&2
+  exit 1
+fi
+
+# Guard: no bare `--` before `scan`. That separator is forwarded into
+# vault-guard argv; Commander then ignores `--format` and the action writes text
+# banners into the SARIF file.
+if grep -nE 'VG_BIN[^\n]*--[[:space:]]+scan' "${ACTION_YML}" >/dev/null; then
+  printf 'action.yml passes a bare `--` before `scan` (breaks --format / SARIF upload)\n' >&2
+  exit 1
+fi
+
+# --- sarif-output -----------------------------------------------------------
+
+# Guard: the output path may not land under .github/, which holds the workflow
+# file and the CODEOWNERS entry that decide how this gate runs.
+if ! grep -n 'must not write under .github/' "${ACTION_YML}" >/dev/null; then
+  printf 'action.yml no longer refuses a sarif-output under .github/\n' >&2
+  exit 1
+fi
+
+# Guard: and may not resolve through a symlink, checked BEFORE the containing
+# directories are created rather than after.
+if ! grep -n 'resolves through a symlink' "${ACTION_YML}" >/dev/null; then
+  printf 'action.yml no longer refuses a sarif-output that resolves through a symlink\n' >&2
+  exit 1
+fi
+symlink_line="$(grep -n -- '-L "${CURSOR}"' "${ACTION_YML}" | head -1 | cut -d: -f1)"
+mkdir_line="$(grep -n 'mkdir -p "$(dirname "${OUT}")"' "${ACTION_YML}" | head -1 | cut -d: -f1)"
+if [[ -z "${symlink_line}" || -z "${mkdir_line}" || "${symlink_line}" -gt "${mkdir_line}" ]]; then
+  printf 'the symlink guard must run before mkdir -p, or a refused run has already created directories through the link\n' >&2
   exit 1
 fi
 
@@ -85,13 +648,18 @@ validate_trust_base() {
   # accepted before 1.7.0 shipped and was removed because a same-repo
   # pull_request event runs the workflow file from the pull request head, so an
   # off switch here sits on the untrusted side of the boundary it turns off.
-  if [[ "${value}" == "off" ]]; then
-    return 1
-  fi
+  # Matched in any capitalisation: a value refused as `off` and accepted as
+  # `Off` is an opt-out with a shift key in front of it.
+  case "${value}" in
+    [Oo][Ff][Ff]) return 1 ;;
+  esac
   if [[ "${value}" == "auto" ]]; then
     return 0
   fi
   if [[ ! "${value}" =~ ^[A-Za-z0-9._/@^~-]+$ ]] || (( ${#value} > 200 )); then
+    return 1
+  fi
+  if [[ "${value}" == -* ]]; then
     return 1
   fi
   return 0
@@ -118,6 +686,9 @@ assert_trust_ok "v1.2.3^"
 
 assert_trust_bad ""
 assert_trust_bad "off"
+assert_trust_bad "Off"
+assert_trust_bad "OFF"
+assert_trust_bad "-rf"
 assert_trust_bad 'HEAD^{commit}'
 assert_trust_bad 'origin/$(id)'
 assert_trust_bad 'origin/main; rm -rf /'
@@ -150,9 +721,9 @@ if grep -nE '"\$\{VG_TRUST_BASE\}" != "off"' "${ACTION_YML}" >/dev/null; then
   exit 1
 fi
 
-# Guard: the ref must reach npx as a bash ARRAY element, so a branch name with
-# a space stays one argv entry. A string built with `TRUST_ARGS="--trust-base
-# ${ref}"` would word-split at the first space.
+# Guard: the ref must reach the scanner as a bash ARRAY element, so a branch
+# name with a space stays one argv entry. A string built with
+# `TRUST_ARGS="--trust-base ${ref}"` would word-split at the first space.
 if ! grep -nE 'TRUST_ARGS=\(' "${ACTION_YML}" >/dev/null; then
   printf 'action.yml no longer builds the trust-base args as an array\n' >&2
   exit 1
@@ -160,25 +731,26 @@ fi
 
 # Guard: `set -u` plus bash 3.2 (macOS runners) aborts on a bare empty-array
 # expansion, so the `+` form is required rather than stylistic. Checked on the
-# npx line itself, not anywhere in the file: an earlier version of this guard
-# grepped the whole document and was satisfied by the COMMENT explaining the
-# idiom, which is a guard that passes whatever the code says.
-npx_line="$(grep 'npx --yes' "${ACTION_YML}" || true)"
-if [[ -z "${npx_line}" ]]; then
-  printf 'action.yml no longer invokes npx --yes\n' >&2
+# invocation line itself, not anywhere in the file: an earlier version of this
+# guard grepped the whole document and was satisfied by the COMMENT explaining
+# the idiom, which is a guard that passes whatever the code says.
+scan_line="$(grep '"${VG_BIN}" "${ARGS\[@\]}"' "${ACTION_YML}" || true)"
+if [[ -z "${scan_line}" ]]; then
+  printf 'action.yml no longer invokes the installed scanner with its argv array\n' >&2
   exit 1
 fi
-if [[ "${npx_line}" != *'TRUST_ARGS[@]+'* ]]; then
-  printf 'the npx line expands TRUST_ARGS without the ${a[@]+...} guard (breaks bash 3.2 + set -u)\n' >&2
-  exit 1
-fi
-
-# Guard: the base ref must never be interpolated into a run body as a GitHub
-# expression. That substitution happens before the shell parses the script, so
-# no amount of quoting downstream helps.
-if grep -nE '\$\{\{[^}]*base_ref' "${ACTION_YML}" >/dev/null; then
-  printf 'action.yml interpolates base_ref into a run body (command injection)\n' >&2
+if [[ "${scan_line}" != *'TRUST_ARGS[@]+'* ]]; then
+  printf 'the scan line expands TRUST_ARGS without the ${a[@]+...} guard (breaks bash 3.2 + set -u)\n' >&2
   exit 1
 fi
 
-printf 'action path validation OK (%s bash %s)\n' "$(uname -s)" "${BASH_VERSION}"
+# Guard: no GitHub expression may be interpolated into a run body. That
+# substitution happens before the shell parses the script, so no amount of
+# quoting downstream helps. The same expression in an env: mapping is the
+# safe form -- Actions expands it into the env var at runtime -- and is how
+# Validate inputs declares GITHUB_BASE_REF from the event payload. The check
+# lives in assert_step_parses, which reads each extracted run script.
+
+# Names the interpreter, not just the version: the whole point of the syntax
+# check above is which bash did the parsing, so the green line has to say.
+printf 'action path validation OK (%s, %s, bash %s)\n' "$(uname -s)" "${BASH}" "${BASH_VERSION}"

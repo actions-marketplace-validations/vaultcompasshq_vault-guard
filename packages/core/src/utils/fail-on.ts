@@ -3,7 +3,7 @@ import type { FileScanResult } from '../scan-output';
 
 /**
  * Severity threshold at or above which a finding makes the scan **fail**
- * (non-zero exit). `'none'` never fails the gate — findings are still
+ * (non-zero exit). `'none'` never fails the gate -- findings are still
  * reported, which is the right mode for an advisory / observe-only rollout.
  */
 export type FailOnThreshold = SecretMatch['severity'] | 'none';

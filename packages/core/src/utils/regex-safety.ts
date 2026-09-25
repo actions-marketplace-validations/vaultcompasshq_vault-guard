@@ -20,8 +20,8 @@ import type { DiagnosticCode } from '../diagnostics';
  *   2. Quantifier-density cap (>25 of `* + ? {`): the academic ReDoS literature
  *      shows pathological patterns concentrate quantifiers; this is the same
  *      threshold `safe-regex` uses.
- *   3. Nested-quantifier shape: `(…[*+]…)[*+]` — catches `(a+)+`, `(\d+)*`.
- *   4. Alternation-quantifier shape: `(.|.)[*+]` — catches `(a|a)+`, `(\d|\d)*`.
+ *   3. Nested-quantifier shape: `(…[*+]…)[*+]` -- catches `(a+)+`, `(\d+)*`.
+ *   4. Alternation-quantifier shape: `(.|.)[*+]` -- catches `(a|a)+`, `(\d|\d)*`.
  *
  * What this does NOT catch
  * ------------------------
@@ -178,7 +178,7 @@ export function mapPatternRejectionReasonToDiagnosticCode(reason: string): Diagn
 /**
  * Count `* + ? {` quantifier characters outside character classes.
  *
- * Approximation only — doesn't fully tokenise the regex, just skips `[…]`
+ * Approximation only -- doesn't fully tokenise the regex, just skips `[…]`
  * blocks where these characters are literal. Good enough to flag pathological
  * patterns without false-positiving on `[a-z?]` or `\?`.
  */

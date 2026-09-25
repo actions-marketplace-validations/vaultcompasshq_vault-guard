@@ -1,13 +1,14 @@
 {
   "name": "@vaultcompass/vault-guard-monorepo",
   "version": "1.0.0",
-  "description": "Security and optimization layer for AI-native coding (workspace root — not published)",
+  "description": "Security and optimization layer for AI-native coding (workspace root -- not published)",
   "private": true,
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "test:coverage": "pnpm -r --workspace-concurrency=1 run test:coverage",
-    "test:windows": "pnpm --filter @vaultcompass/vault-guard-core test -- --testPathIgnorePatterns=pre-commit-hook && pnpm --filter @vaultcompass/vault-guard test -- --testPathIgnorePatterns=integration",
+    "test:release-kind": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.release-kind.config.mjs",
+    "test:windows": "pnpm --filter @vaultcompass/vault-guard-core test -- --testPathIgnorePatterns=pre-commit-hook && pnpm --filter @vaultcompass/vault-guard test -- --testPathIgnorePatterns=integration --testPathIgnorePatterns=__tests__.action",
     "gen:rules-doc": "node scripts/gen-rules-doc.cjs",
     "lint": "eslint .",
     "check:pack": "node scripts/check-pack.cjs",
@@ -18,6 +19,8 @@
     "prepublishOnly": "pnpm build",
     "release": "pnpm publish -r --access public --filter \"@vaultcompass/*\"",
     "bench": "node bench/run.cjs",
+    "bench:action-install": "node bench/action-install.cjs --compare",
+    "bench:action-install:update-baseline": "node bench/action-install.cjs --write-baseline",
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release:next": "pnpm build && pnpm check:pack && pnpm publish -r --tag next --no-git-checks --filter \"@vaultcompass/*\""
@@ -52,13 +55,13 @@
   "pnpm": {
     "overrides": {
       "esbuild": "0.28.1",
-      "hono": "4.12.34",
+      "hono": "4.13.7",
       "@hono/node-server": "^2.0.12",
       "fast-uri": "^4.1.4",
       "brace-expansion": "^5.0.9",
       "ip-address": "^10.3.1",
-      "js-yaml@3": "^3.15.1",
-      "js-yaml@4": "^4.3.1",
+      "js-yaml@3": "^3.15.2",
+      "js-yaml@4": "^4.3.2",
       "browserslist": "^4.28.7",
       "qs": "^6.16.0"
     }

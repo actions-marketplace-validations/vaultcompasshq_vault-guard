@@ -446,16 +446,16 @@
 
 ### Minor Changes
 
-- fix(core): broaden OpenAI key detection with T3BlbkFJ watermark — adds svcacct/admin/legacy
+- fix(core): broaden OpenAI key detection with T3BlbkFJ watermark -- adds svcacct/admin/legacy
 
   The previous `openai` pattern (`sk-[a-zA-Z0-9]{48}`) was a fixed 48-char match
   from the pre-2024 key format. Modern OpenAI keys use a `T3BlbkFJ` watermark
   (base64 for "OpenAI") and come in four formats, all of which were missed:
 
-  - `sk-proj-` — project-scoped key (the current default)
-  - `sk-svcacct-` — service-account key for non-human identities
-  - `sk-admin-` — org-wide admin key (cannot call inference APIs)
-  - `sk-` (legacy) — pre-project user key with watermark at positions 20 and 40+
+  - `sk-proj-` -- project-scoped key (the current default)
+  - `sk-svcacct-` -- service-account key for non-human identities
+  - `sk-admin-` -- org-wide admin key (cannot call inference APIs)
+  - `sk-` (legacy) -- pre-project user key with watermark at positions 20 and 40+
 
   Each format now has its own rule entry (distinct blast radius). The legacy `sk-`
   catch-all uses a token-boundary lookbehind and requires the watermark, preventing

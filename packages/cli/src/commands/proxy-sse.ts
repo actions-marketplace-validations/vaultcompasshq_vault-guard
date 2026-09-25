@@ -7,7 +7,7 @@ export interface SseUsage {
 /**
  * Extract token usage from a buffered Anthropic SSE stream.
  *
- * Pure and synchronous — no HTTP dependencies — so it can be unit-tested
+ * Pure and synchronous -- no HTTP dependencies -- so it can be unit-tested
  * without spinning up a server. Call after the full response has been teed.
  *
  * Anthropic usage token delivery:

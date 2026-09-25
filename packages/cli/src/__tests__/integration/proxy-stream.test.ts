@@ -30,7 +30,7 @@ beforeEach(() => {
 
 describe('proxy response streaming + tee behaviour', () => {
   // -------------------------------------------------------------------------
-  // Non-streaming JSON — happy path
+  // Non-streaming JSON -- happy path
   // -------------------------------------------------------------------------
 
   it('pipes non-streaming JSON response to client and parses usage tokens', async () => {
@@ -68,7 +68,7 @@ describe('proxy response streaming + tee behaviour', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Tee overflow — client still gets the full response
+  // Tee overflow -- client still gets the full response
   // -------------------------------------------------------------------------
 
   it('abandons tee when response exceeds 1 MB but client receives full body', async () => {
@@ -136,7 +136,7 @@ describe('proxy response streaming + tee behaviour', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Streaming SSE response — parses real usage tokens
+  // Streaming SSE response -- parses real usage tokens
   // -------------------------------------------------------------------------
 
   it('forwards streaming response byte-for-byte and parses input/output tokens', async () => {

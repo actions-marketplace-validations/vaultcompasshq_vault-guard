@@ -14,7 +14,7 @@ const MAX_REQUEST_BYTES = 32 * 1024 * 1024;
 /**
  * Hard cap on the in-memory **tee** of the upstream response body, used only
  * for usage-token parsing on non-streaming responses. The wire response is
- * piped to the client independently and is **not** bounded here — backpressure
+ * piped to the client independently and is **not** bounded here -- backpressure
  * is handled by the OS pipe.
  *
  * If a response exceeds this cap before `end`, we abandon the tee (the user
@@ -56,7 +56,7 @@ export interface ProxyOptions {
    * (anything other than `127.0.0.1`, `localhost`, `::1`, `::ffff:127.0.0.1`).
    *
    * **Security:** Default is `false`. Binding `0.0.0.0` or a LAN IP exposes
-   * the proxy to anyone reachable on the network — combined with the
+   * the proxy to anyone reachable on the network -- combined with the
    * env-fallback path above, this is a credit-card-draining footgun. Refuse
    * by default and require explicit opt-in.
    */
@@ -403,7 +403,7 @@ async function handleRequest(
       pres.pipe(res);
 
       if (!isJsonResponse) {
-        // Non-JSON response (e.g. error HTML) — no usage to extract.
+        // Non-JSON response (e.g. error HTML) -- no usage to extract.
         pres.on('end', () => {
           store.recordUsage({
             provider: 'anthropic',
@@ -550,7 +550,7 @@ function parseListen(listen: string): [string, string] {
  * Loopback host detector. Recognises:
  *   - `127.0.0.1`, `localhost`
  *   - `::1`, `[::1]`
- *   - `::ffff:127.0.0.1` (IPv4-mapped IPv6 loopback — Linux/macOS dual-stack
+ *   - `::ffff:127.0.0.1` (IPv4-mapped IPv6 loopback -- Linux/macOS dual-stack
  *     sockets sometimes report this)
  *
  * Anything else (including `0.0.0.0`, `::`, the empty string, LAN IPs) is

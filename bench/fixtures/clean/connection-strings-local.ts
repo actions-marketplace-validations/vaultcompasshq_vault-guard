@@ -1,5 +1,5 @@
 // False positive candidates: local / dev / docker / placeholder connection
-// strings. These are config, not leaked credentials — the dominant real-world
+// strings. These are config, not leaked credentials -- the dominant real-world
 // FP source (docker-compose, .env.example, test setup).
 const LOCAL_PG = "postgres://prisma:prisma@localhost:5432/tests";
 const DEFAULT_MYSQL = "mysql://root:root@localhost:3306/tests";
