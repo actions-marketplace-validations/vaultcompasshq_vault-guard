@@ -43,7 +43,7 @@
   "dependencies": {
     "@vaultcompass/vault-guard-core": "workspace:*",
     "@vaultcompass/vault-guard-telemetry": "workspace:*",
-    "chalk": "^4.1.2",
+    "chalk": "^6.0.0",
     "commander": "^12.0.0"
   },
   "devDependencies": {
